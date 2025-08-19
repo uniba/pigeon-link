@@ -3,7 +3,7 @@ import {
   MessageBody,
   PigeonOptiuons,
   RecievedMessage,
-  TransmitMessage,
+  SendMessage,
 } from "./types.ts";
 
 class Pigeon {
@@ -24,7 +24,17 @@ class Pigeon {
 
       this.isConnected = false;
 
-      this.on<{
+      this.socket.addEventListener("message", (e) => {
+        const data = JSON.parse(e.data);
+        const message = this.parseRecieveMessage(data);
+        dispatchEvent(
+          new CustomEvent<RecievedMessage>("pigeon:receive", {
+            detail: message,
+          }),
+        );
+      });
+
+      this.onRecieveMessage<{
         id: string;
         clients: string[];
       }>({ type: "init" }, (message) => {
@@ -34,7 +44,7 @@ class Pigeon {
         }
       });
 
-      this.on({ type: "ping" }, (message) => {
+      this.onRecieveMessage({ type: "ping" }, (message) => {
         this.pong([message.from]);
       });
     } catch (e) {
@@ -62,26 +72,29 @@ class Pigeon {
   }
 
   public send<T extends MessageBody = MessageBody>(
-    message: TransmitMessage<T>,
+    message: SendMessage<T>,
   ): void {
     this.socket.send(JSON.stringify(message));
+    dispatchEvent(
+      new CustomEvent<SendMessage<T>>("pigeon:send", { detail: message }),
+    );
   }
 
-  public on<T extends MessageBody = MessageBody>(
+  public onSendMessage<T extends MessageBody = MessageBody>(
     target: {
       type: string | RegExp;
     },
-    handler: (message: RecievedMessage<T>) => void,
+    handler: (message: SendMessage<T>) => void,
     options?: boolean | AddEventListenerOptions,
   ) {
     let type: string | RegExp = "*";
     if ("type" in target) {
       type = target.type;
     }
-    this.socket.addEventListener("message", (e) => {
+    addEventListener("pigeon:send", (event) => {
+      const e = event as CustomEvent<SendMessage<T>>;
       try {
-        const data = JSON.parse(e.data);
-        const message = this.parseMessage<T>(data);
+        const message = e.detail;
         let isTargetMatch = false;
         if (type instanceof RegExp) {
           isTargetMatch = type.test(message.type);
@@ -93,7 +106,11 @@ class Pigeon {
             isTargetMatch = true;
           }
         }
-        if (isTargetMatch) handler(message);
+        if (isTargetMatch) {
+          queueMicrotask(() => {
+            handler(message);
+          });
+        }
       } catch (e) {
         throw new Error(
           "Failed to parse Pigeon Message in parse message.",
@@ -105,7 +122,49 @@ class Pigeon {
     }, options);
   }
 
-  private parseMessage<T extends MessageBody>(
+  public onRecieveMessage<T extends MessageBody = MessageBody>(
+    target: {
+      type: string | RegExp;
+    },
+    handler: (message: RecievedMessage<T>) => void,
+    options?: boolean | AddEventListenerOptions,
+  ) {
+    let type: string | RegExp = "*";
+    if ("type" in target) {
+      type = target.type;
+    }
+    addEventListener("pigeon:receive", (event) => {
+      const e = event as CustomEvent<RecievedMessage<T>>;
+      try {
+        const message = e.detail;
+        let isTargetMatch = false;
+        if (type instanceof RegExp) {
+          isTargetMatch = type.test(message.type);
+        } else {
+          if ("*" === type) {
+            isTargetMatch = true;
+          }
+          if (message.type === type) {
+            isTargetMatch = true;
+          }
+        }
+        if (isTargetMatch) {
+          queueMicrotask(() => {
+            handler(message);
+          });
+        }
+      } catch (e) {
+        throw new Error(
+          "Failed to parse Pigeon Message in parse message.",
+          {
+            cause: e,
+          },
+        );
+      }
+    }, options);
+  }
+
+  private parseRecieveMessage<T extends MessageBody>(
     message: unknown,
   ): RecievedMessage<T> {
     const error = new Error(

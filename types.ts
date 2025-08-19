@@ -41,7 +41,7 @@ export type RecievedMessage<T extends MessageBody = MessageBody> = {
   type: string;
 };
 
-export type TransmitMessage<T extends MessageBody = MessageBody> = {
+export type SendMessage<T extends MessageBody = MessageBody> = {
   body: T;
   to: string[];
   type: string;
