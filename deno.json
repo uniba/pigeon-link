@@ -1,0 +1,16 @@
+{
+  "name": "@circuitlab/pigeon-link",
+  "version": "0.1.0",
+  "license": "MIT",
+  "exports": "./mod.ts",
+  "fmt": {
+    "singleQuote": false,
+    "semiColons": true
+  },
+  "lint": {
+  },
+  "imports": {
+    "@akisoqls/random-string": "jsr:@akisoqls/random-string@^0.1.1"
+  }
+}
+
