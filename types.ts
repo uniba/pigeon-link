@@ -14,7 +14,7 @@ export type MessageBody =
 
 export const isMessageBody = (
   x: unknown,
-  seen = new WeakSet<object>(),
+  seen: WeakSet<object> = new WeakSet<object>(),
 ): x is MessageBody => {
   if (x === null) return true;
   const t = typeof x;
@@ -46,4 +46,3 @@ export type TransmitMessage<T extends MessageBody = MessageBody> = {
   to: string[];
   type: string;
 };
-
