@@ -1,7 +1,7 @@
 import {
   isMessageBody,
   MessageBody,
-  PigeonOptiuons,
+  PigeonOptions,
   RecievedMessage,
   SendMessage,
 } from "./types.ts";
@@ -11,7 +11,7 @@ class Pigeon {
   public isConnected: boolean;
   public socket: WebSocket;
 
-  constructor(pigeonOptiuons: PigeonOptiuons) {
+  constructor(pigeonOptiuons: PigeonOptions) {
     try {
       this.socket = new WebSocket(
         pigeonOptiuons.baseUrl + "?address=" + pigeonOptiuons.address +

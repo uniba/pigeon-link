@@ -1,4 +1,4 @@
-export type PigeonOptiuons = {
+export type PigeonOptions = {
   baseUrl: string;
   address: string;
   staticId?: string;
