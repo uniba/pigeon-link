@@ -2,7 +2,7 @@ import {
   isMessageBody,
   MessageBody,
   PigeonOptions,
-  RecievedMessage,
+  ReceivedMessage,
   SendMessage,
 } from "./types.ts";
 
@@ -11,13 +11,13 @@ class Pigeon {
   public isConnected: boolean;
   public socket: WebSocket;
 
-  constructor(pigeonOptiuons: PigeonOptions) {
+  constructor(pigeonOptions: PigeonOptions) {
     try {
       this.socket = new WebSocket(
-        pigeonOptiuons.baseUrl + "?address=" + pigeonOptiuons.address +
+        pigeonOptions.baseUrl + "?address=" + pigeonOptions.address +
           (
-            pigeonOptiuons.staticId
-              ? "&initas=" + encodeURIComponent(pigeonOptiuons.staticId)
+            pigeonOptions.staticId
+              ? "&initas=" + encodeURIComponent(pigeonOptions.staticId)
               : ""
           ),
       );
@@ -26,15 +26,15 @@ class Pigeon {
 
       this.socket.addEventListener("message", (e) => {
         const data = JSON.parse(e.data);
-        const message = this.parseRecieveMessage(data);
+        const message = this.parseReceiveMessage(data);
         dispatchEvent(
-          new CustomEvent<RecievedMessage>("pigeon:receive", {
+          new CustomEvent<ReceivedMessage>("pigeon:receive", {
             detail: message,
           }),
         );
       });
 
-      this.onRecieveMessage<{
+      this.onReceiveMessage<{
         id: string;
         clients: string[];
       }>({ type: "init" }, (message) => {
@@ -44,7 +44,7 @@ class Pigeon {
         }
       });
 
-      this.onRecieveMessage({ type: "ping" }, (message) => {
+      this.onReceiveMessage({ type: "ping" }, (message) => {
         this.pong([message.from]);
       });
     } catch (e) {
@@ -122,11 +122,11 @@ class Pigeon {
     }, options);
   }
 
-  public onRecieveMessage<T extends MessageBody = MessageBody>(
+  public onReceiveMessage<T extends MessageBody = MessageBody>(
     target: {
       type: string | RegExp;
     },
-    handler: (message: RecievedMessage<T>) => void,
+    handler: (message: ReceivedMessage<T>) => void,
     options?: boolean | AddEventListenerOptions,
   ) {
     let type: string | RegExp = "*";
@@ -134,7 +134,7 @@ class Pigeon {
       type = target.type;
     }
     addEventListener("pigeon:receive", (event) => {
-      const e = event as CustomEvent<RecievedMessage<T>>;
+      const e = event as CustomEvent<ReceivedMessage<T>>;
       try {
         const message = e.detail;
         let isTargetMatch = false;
@@ -164,9 +164,9 @@ class Pigeon {
     }, options);
   }
 
-  private parseRecieveMessage<T extends MessageBody>(
+  private parseReceiveMessage<T extends MessageBody>(
     message: unknown,
-  ): RecievedMessage<T> {
+  ): ReceivedMessage<T> {
     const error = new Error(
       `Uncaught SyntaxError: ${String(message)} is not valid Message`,
     );

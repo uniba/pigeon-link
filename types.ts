@@ -32,7 +32,7 @@ export const isMessageBody = (
   return false;
 };
 
-export type RecievedMessage<T extends MessageBody = MessageBody> = {
+export type ReceivedMessage<T extends MessageBody = MessageBody> = {
   address: string;
   body: T;
   from: string;
