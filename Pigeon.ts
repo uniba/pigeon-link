@@ -1,25 +1,31 @@
 import {
   isMessageBody,
-  MessageBody,
-  PigeonOptions,
-  ReceivedMessage,
-  SendMessage,
+  type MessageBody,
+  type PigeonOptions,
+  type ReceivedMessage,
+  type SendMessage,
 } from "./types.ts";
+
+type ListenerKey = string | RegExp;
+type ListenerMap = Map<unknown, Map<ListenerKey, EventListener>>;
 
 class Pigeon {
   public id: string | undefined;
   public isConnected: boolean;
   public socket: WebSocket;
 
+  private receiveListenerMap: ListenerMap = new Map();
+  private sendListenerMap: ListenerMap = new Map();
+
   constructor(pigeonOptions: PigeonOptions) {
     try {
       this.socket = new WebSocket(
-        pigeonOptions.baseUrl + "?address=" + pigeonOptions.address +
-          (
-            pigeonOptions.staticId
-              ? "&initas=" + encodeURIComponent(pigeonOptions.staticId)
-              : ""
-          ),
+        pigeonOptions.baseUrl +
+          "?address=" +
+          pigeonOptions.address +
+          (pigeonOptions.staticId
+            ? "&initas=" + encodeURIComponent(pigeonOptions.staticId)
+            : ""),
       );
 
       this.isConnected = false;
@@ -34,7 +40,7 @@ class Pigeon {
         );
       });
 
-      this.onReceiveMessage<{
+      this.addReceiveMessageListener<{
         id: string;
         clients: string[];
       }>({ type: "init" }, (message) => {
@@ -44,7 +50,7 @@ class Pigeon {
         }
       });
 
-      this.onReceiveMessage({ type: "ping" }, (message) => {
+      this.addReceiveMessageListener({ type: "ping" }, (message) => {
         this.pong([message.from]);
       });
     } catch (e) {
@@ -80,88 +86,144 @@ class Pigeon {
     );
   }
 
-  public onSendMessage<T extends MessageBody = MessageBody>(
-    target: {
-      type: string | RegExp;
-    },
+  public addSendMessageListener<T extends MessageBody = MessageBody>(
+    target: { type: string | RegExp },
     handler: (message: SendMessage<T>) => void,
     options?: boolean | AddEventListenerOptions,
-  ) {
-    let type: string | RegExp = "*";
-    if ("type" in target) {
-      type = target.type;
-    }
-    addEventListener("pigeon:send", (event) => {
-      const e = event as CustomEvent<SendMessage<T>>;
-      try {
-        const message = e.detail;
-        let isTargetMatch = false;
-        if (type instanceof RegExp) {
-          isTargetMatch = type.test(message.type);
-        } else {
-          if ("*" === type) {
-            isTargetMatch = true;
-          }
-          if (message.type === type) {
-            isTargetMatch = true;
-          }
-        }
-        if (isTargetMatch) {
-          queueMicrotask(() => {
-            handler(message);
-          });
-        }
-      } catch (e) {
-        throw new Error(
-          "Failed to parse Pigeon Message in parse message.",
-          {
-            cause: e,
-          },
-        );
-      }
-    }, options);
+  ): void {
+    this.addMessageListener<SendMessage<T>>(
+      "pigeon:send",
+      this.sendListenerMap,
+      target,
+      handler,
+      options,
+    );
   }
 
+  public removeSendMessageListener<T extends MessageBody = MessageBody>(
+    target: { type: string | RegExp },
+    handler: (message: SendMessage<T>) => void,
+    options?: boolean | EventListenerOptions,
+  ): void {
+    this.removeMessageListener(
+      "pigeon:send",
+      this.sendListenerMap,
+      target,
+      handler,
+      options,
+    );
+  }
+
+  public addReceiveMessageListener<T extends MessageBody = MessageBody>(
+    target: { type: string | RegExp },
+    handler: (message: ReceivedMessage<T>) => void,
+    options?: boolean | AddEventListenerOptions,
+  ): void {
+    this.addMessageListener<ReceivedMessage<T>>(
+      "pigeon:receive",
+      this.receiveListenerMap,
+      target,
+      handler,
+      options,
+    );
+  }
+
+  public removeReceiveMessageListener<T extends MessageBody = MessageBody>(
+    target: { type: string | RegExp },
+    handler: (message: ReceivedMessage<T>) => void,
+    options?: boolean | EventListenerOptions,
+  ): void {
+    this.removeMessageListener(
+      "pigeon:receive",
+      this.receiveListenerMap,
+      target,
+      handler,
+      options,
+    );
+  }
+
+  /** @deprecated Use `addReceiveMessageListener` instead. */
   public onReceiveMessage<T extends MessageBody = MessageBody>(
     target: {
       type: string | RegExp;
     },
     handler: (message: ReceivedMessage<T>) => void,
     options?: boolean | AddEventListenerOptions,
-  ) {
-    let type: string | RegExp = "*";
-    if ("type" in target) {
-      type = target.type;
+  ): void {
+    this.addReceiveMessageListener(target, handler, options);
+  }
+
+  /** @deprecated Use `addSendMessageListener` instead. */
+  public onSendMessage<T extends MessageBody = MessageBody>(
+    target: { type: string | RegExp },
+    handler: (message: SendMessage<T>) => void,
+    options?: boolean | AddEventListenerOptions,
+  ): void {
+    this.addSendMessageListener(target, handler, options);
+  }
+
+  private addMessageListener<M extends { type: string }>(
+    eventName: "pigeon:receive" | "pigeon:send",
+    map: ListenerMap,
+    target: { type: string | RegExp },
+    handler: (message: M) => void,
+    options?: boolean | AddEventListenerOptions,
+  ): void {
+    const type: string | RegExp = target.type ?? "*";
+
+    let typeMap = map.get(handler);
+    if (!typeMap) {
+      typeMap = new Map();
+      map.set(handler, typeMap);
     }
-    addEventListener("pigeon:receive", (event) => {
-      const e = event as CustomEvent<ReceivedMessage<T>>;
-      try {
-        const message = e.detail;
-        let isTargetMatch = false;
-        if (type instanceof RegExp) {
-          isTargetMatch = type.test(message.type);
-        } else {
-          if ("*" === type) {
-            isTargetMatch = true;
-          }
-          if (message.type === type) {
-            isTargetMatch = true;
-          }
-        }
-        if (isTargetMatch) {
-          queueMicrotask(() => {
-            handler(message);
-          });
-        }
-      } catch (e) {
-        throw new Error(
-          "Failed to parse Pigeon Message in parse message.",
-          {
-            cause: e,
-          },
-        );
+    // Already registered for the same (handler, type) pair: ignore (matches addEventListener semantics).
+    if (typeMap.has(type)) return;
+
+    const listener = (event: Event) => {
+      const message = (event as CustomEvent<M>).detail;
+      let isTargetMatch = false;
+      if (type instanceof RegExp) {
+        isTargetMatch = type.test(message.type);
+      } else if (type === "*" || message.type === type) {
+        isTargetMatch = true;
       }
-    }, options);
+      if (isTargetMatch) {
+        queueMicrotask(() => {
+          try {
+            handler(message);
+          } catch (e) {
+            console.error(`Error in ${eventName} handler:`, e);
+          }
+        });
+      }
+    };
+
+    typeMap.set(type, listener);
+    addEventListener(eventName, listener, options);
+  }
+
+  private removeMessageListener(
+    eventName: "pigeon:receive" | "pigeon:send",
+    map: ListenerMap,
+    target: {
+      type: string | RegExp;
+    },
+    handler: unknown,
+    options?: boolean | EventListenerOptions,
+  ): void {
+    const type: string | RegExp = target.type ?? "*";
+
+    const typeMap = map.get(handler);
+    if (!typeMap) return;
+
+    const listener = typeMap.get(type);
+    if (!listener) return;
+
+    removeEventListener(eventName, listener, options);
+    typeMap.delete(type);
+    if (typeMap.size === 0) {
+      map.delete(handler);
+    }
   }
 
   private parseReceiveMessage<T extends MessageBody>(
@@ -170,35 +232,18 @@ class Pigeon {
     const error = new Error(
       `Uncaught SyntaxError: ${String(message)} is not valid Message`,
     );
-    if (
-      typeof message !== "object" ||
-      message === null
-    ) throw error;
-    if (
-      !("address" in message) ||
-      typeof message.address !== "string"
-    ) throw error;
-    if (
-      !("from" in message) ||
-      typeof message.from !== "string"
-    ) throw error;
-    if (
-      !("timestamp" in message) ||
-      typeof message.timestamp !== "number"
-    ) throw error;
-    if (
-      !("to" in message) ||
-      !Array.isArray(message.to)
-    ) throw error;
+    if (typeof message !== "object" || message === null) throw error;
+    if (!("address" in message) || typeof message.address !== "string") {
+      throw error;
+    }
+    if (!("from" in message) || typeof message.from !== "string") throw error;
+    if (!("timestamp" in message) || typeof message.timestamp !== "number") {
+      throw error;
+    }
+    if (!("to" in message) || !Array.isArray(message.to)) throw error;
     if (!message.to.every((to) => typeof to === "string")) throw error;
-    if (
-      !("type" in message) ||
-      typeof message.type !== "string"
-    ) throw error;
-    if (
-      !("body" in message) ||
-      !isMessageBody(message.body)
-    ) throw error;
+    if (!("type" in message) || typeof message.type !== "string") throw error;
+    if (!("body" in message) || !isMessageBody(message.body)) throw error;
 
     return {
       address: message.address,
