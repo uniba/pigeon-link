@@ -16,10 +16,10 @@ const pigeon = new Pigeon({
 
 Handlers can be registered to listen for specific message types, both for receiving and sending messages.
 
-### `onReceiveMessage(target, handler, options?)`
+### `addReceiveMessageListener(target, handler, options?)`
 
 ```typescript
-pigeon.onReceiveMessage<T>({
+pigeon.addReceiveMessageListener<T>({
   type: "messageType",
 }, receiveHandler);
 ```
@@ -40,10 +40,20 @@ A callback function that will be invoked when a matching message is received.
     - boolean | AddEventListenerOptions
         Options are passed directly to `addEventListener("pigeon:receive", ...)`.
 
-### `onSendMessage(target, handler, options?)`
+### `removeReceiveMessageListener(target, handler, options?)`
+
+Removes a previously registered receive handler. The same `target.type` and `handler` reference must be passed to identify which listener to remove.
 
 ```typescript
-pigeon.onSendMessage<T>({
+pigeon.removeReceiveMessageListener({
+  type: "messageType",
+}, receiveHandler);
+```
+
+### `addSendMessageListener(target, handler, options?)`
+
+```typescript
+pigeon.addSendMessageListener<T>({
   type: "messageType",
 }, sendHandler);
 ```
@@ -64,7 +74,26 @@ A callback function that will be invoked when a matching message is sent.
     - boolean | AddEventListenerOptions
         Options are passed directly to `addEventListener("pigeon:send", ...)`.
 
+### `removeSendMessageListener(target, handler, options?)`
+
+Removes a previously registered send handler. The same `target.type` and `handler` reference must be passed to identify which listener to remove.
+
+```typescript
+pigeon.removeSendMessageListener({
+  type: "messageType",
+}, sendHandler);
+```
+
 ## Auto send pong on receive ping
 
 Automatically replies with a pong message when `ping` is receivec.
+
+## Deprecated APIs
+
+The following methods are kept as aliases for backward compatibility. New code should prefer the `add*` / `remove*` variants.
+
+- `onReceiveMessage(target, handler, options?)` — alias of `addReceiveMessageListener`.
+- `onSendMessage(target, handler, options?)` — alias of `addSendMessageListener`.
+
+Listeners registered with the deprecated methods can still be removed via `removeReceiveMessageListener` / `removeSendMessageListener` by passing the same `target.type` and `handler`.
 
