@@ -123,6 +123,16 @@ pigeon.removeSendMessageListener({
 }, sendHandler);
 ```
 
+## `destroy()`
+
+Closes the underlying WebSocket and unregisters every listener this instance has
+added. Call it when the Pigeon will not be used again (route change, component
+unmount, etc.) to release resources promptly.
+
+```typescript
+pigeon.destroy();
+```
+
 ## Auto send pong on receive ping
 
 Automatically replies with a pong message when `ping` is receivec.

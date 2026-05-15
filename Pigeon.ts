@@ -96,6 +96,18 @@ class Pigeon {
     this.dispatchSend(message);
   }
 
+  /**
+   * Closes the socket and unregisters every listener this instance has
+   * registered. Call this when the Pigeon will not be used again (e.g. on
+   * route change or component unmount) to release resources promptly.
+   */
+  public destroy(): void {
+    this.socket.close();
+    this.receiveListeners.removeAll();
+    this.sendListeners.removeAll();
+    this.isConnected = false;
+  }
+
   // ============================================================
   // Receive listeners
   // ============================================================

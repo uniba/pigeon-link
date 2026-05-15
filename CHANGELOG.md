@@ -16,9 +16,13 @@ All notable changes to this project will be documented in this file.
 - `"*"` literal as the first argument of the listener APIs to match every
   message (e.g.
   `pigeon.addReceiveMessageListener("*", handler, { once: true })`).
+- `destroy()`: closes the socket and unregisters every listener this instance
+  has added. Use it to release resources when the Pigeon will not be used again.
 
 ### Fixed
 
+- `isConnected` is now reset to `false` when the underlying WebSocket emits
+  `close` or `error`. Previously it stayed `true` after the socket dropped.
 - `{ once: true }` was previously consumed by the first received/sent message
   regardless of its `type`, because a single `pigeon:receive` / `pigeon:send`
   event was used with internal filtering. String `type` filters now subscribe to

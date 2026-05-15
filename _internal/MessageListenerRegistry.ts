@@ -52,6 +52,19 @@ export class MessageListenerRegistry<M extends { type: string }> {
     this.unregister(eventName, handler);
   }
 
+  // Unregisters every wrapped listener this registry has added to the global
+  // event target. Note: listeners registered with `capture: true` won't be
+  // matched here; this is fine because capture has no meaning for our custom
+  // events on the global EventTarget (no DOM hierarchy).
+  public removeAll(): void {
+    for (const typeMap of this.map.values()) {
+      for (const [eventName, wrapped] of typeMap) {
+        removeEventListener(eventName, wrapped);
+      }
+    }
+    this.map.clear();
+  }
+
   // Returns the wrapped listener to register, or null if the (handler, eventName)
   // pair is already registered (matches addEventListener semantics).
   private register(
