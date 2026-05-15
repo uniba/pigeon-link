@@ -109,6 +109,11 @@ class Pigeon {
   // ============================================================
 
   public addReceiveMessageListener<T extends MessageBody = MessageBody>(
+    target: "*",
+    handler: (message: ReceivedMessage<T>) => void,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
+  public addReceiveMessageListener<T extends MessageBody = MessageBody>(
     target: { type: string },
     handler: (message: ReceivedMessage<T>) => void,
     options?: boolean | AddEventListenerOptions,
@@ -118,11 +123,19 @@ class Pigeon {
     handler: (message: ReceivedMessage<T>) => void,
   ): void;
   public addReceiveMessageListener<T extends MessageBody = MessageBody>(
-    target: { type: string | RegExp },
+    target: "*" | { type: string | RegExp },
     handler: (message: ReceivedMessage<T>) => void,
     options?: boolean | AddEventListenerOptions,
   ): void {
-    if (target.type instanceof RegExp) {
+    if (target === "*") {
+      this.addStringListener<ReceivedMessage<T>>(
+        "pigeon:receive",
+        this.receiveListenerMap,
+        "*",
+        handler,
+        options,
+      );
+    } else if (target.type instanceof RegExp) {
       this.warnIfOptionsWithRegExp("addReceiveMessageListener", options);
       this.addRegExpListener<ReceivedMessage<T>>(
         "pigeon:receive",
@@ -131,6 +144,7 @@ class Pigeon {
         handler,
       );
     } else {
+      this.warnIfWildcardTypeObject("addReceiveMessageListener", target.type);
       this.addStringListener<ReceivedMessage<T>>(
         "pigeon:receive",
         this.receiveListenerMap,
@@ -142,6 +156,11 @@ class Pigeon {
   }
 
   public removeReceiveMessageListener<T extends MessageBody = MessageBody>(
+    target: "*",
+    handler: (message: ReceivedMessage<T>) => void,
+    options?: boolean | EventListenerOptions,
+  ): void;
+  public removeReceiveMessageListener<T extends MessageBody = MessageBody>(
     target: { type: string },
     handler: (message: ReceivedMessage<T>) => void,
     options?: boolean | EventListenerOptions,
@@ -151,11 +170,19 @@ class Pigeon {
     handler: (message: ReceivedMessage<T>) => void,
   ): void;
   public removeReceiveMessageListener<T extends MessageBody = MessageBody>(
-    target: { type: string | RegExp },
+    target: "*" | { type: string | RegExp },
     handler: (message: ReceivedMessage<T>) => void,
     options?: boolean | EventListenerOptions,
   ): void {
-    if (target.type instanceof RegExp) {
+    if (target === "*") {
+      this.removeStringListener(
+        "pigeon:receive",
+        this.receiveListenerMap,
+        "*",
+        handler,
+        options,
+      );
+    } else if (target.type instanceof RegExp) {
       this.warnIfOptionsWithRegExp("removeReceiveMessageListener", options);
       this.removeRegExpListener(
         "pigeon:receive",
@@ -163,6 +190,10 @@ class Pigeon {
         handler,
       );
     } else {
+      this.warnIfWildcardTypeObject(
+        "removeReceiveMessageListener",
+        target.type,
+      );
       this.removeStringListener(
         "pigeon:receive",
         this.receiveListenerMap,
@@ -178,6 +209,11 @@ class Pigeon {
   // ============================================================
 
   public addSendMessageListener<T extends MessageBody = MessageBody>(
+    target: "*",
+    handler: (message: SendMessage<T>) => void,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
+  public addSendMessageListener<T extends MessageBody = MessageBody>(
     target: { type: string },
     handler: (message: SendMessage<T>) => void,
     options?: boolean | AddEventListenerOptions,
@@ -187,11 +223,19 @@ class Pigeon {
     handler: (message: SendMessage<T>) => void,
   ): void;
   public addSendMessageListener<T extends MessageBody = MessageBody>(
-    target: { type: string | RegExp },
+    target: "*" | { type: string | RegExp },
     handler: (message: SendMessage<T>) => void,
     options?: boolean | AddEventListenerOptions,
   ): void {
-    if (target.type instanceof RegExp) {
+    if (target === "*") {
+      this.addStringListener<SendMessage<T>>(
+        "pigeon:send",
+        this.sendListenerMap,
+        "*",
+        handler,
+        options,
+      );
+    } else if (target.type instanceof RegExp) {
       this.warnIfOptionsWithRegExp("addSendMessageListener", options);
       this.addRegExpListener<SendMessage<T>>(
         "pigeon:send",
@@ -200,6 +244,7 @@ class Pigeon {
         handler,
       );
     } else {
+      this.warnIfWildcardTypeObject("addSendMessageListener", target.type);
       this.addStringListener<SendMessage<T>>(
         "pigeon:send",
         this.sendListenerMap,
@@ -211,6 +256,11 @@ class Pigeon {
   }
 
   public removeSendMessageListener<T extends MessageBody = MessageBody>(
+    target: "*",
+    handler: (message: SendMessage<T>) => void,
+    options?: boolean | EventListenerOptions,
+  ): void;
+  public removeSendMessageListener<T extends MessageBody = MessageBody>(
     target: { type: string },
     handler: (message: SendMessage<T>) => void,
     options?: boolean | EventListenerOptions,
@@ -220,11 +270,19 @@ class Pigeon {
     handler: (message: SendMessage<T>) => void,
   ): void;
   public removeSendMessageListener<T extends MessageBody = MessageBody>(
-    target: { type: string | RegExp },
+    target: "*" | { type: string | RegExp },
     handler: (message: SendMessage<T>) => void,
     options?: boolean | EventListenerOptions,
   ): void {
-    if (target.type instanceof RegExp) {
+    if (target === "*") {
+      this.removeStringListener(
+        "pigeon:send",
+        this.sendListenerMap,
+        "*",
+        handler,
+        options,
+      );
+    } else if (target.type instanceof RegExp) {
       this.warnIfOptionsWithRegExp("removeSendMessageListener", options);
       this.removeRegExpListener(
         "pigeon:send",
@@ -232,6 +290,7 @@ class Pigeon {
         handler,
       );
     } else {
+      this.warnIfWildcardTypeObject("removeSendMessageListener", target.type);
       this.removeStringListener(
         "pigeon:send",
         this.sendListenerMap,
@@ -258,14 +317,20 @@ class Pigeon {
    * Will be removed in v1.0.0.
    */
   public onReceiveMessage<T extends MessageBody = MessageBody>(
-    target: { type: string | RegExp },
+    target: "*" | { type: string | RegExp },
     handler: (message: ReceivedMessage<T>) => void,
     options?: boolean | AddEventListenerOptions,
   ): void {
-    if (target.type instanceof RegExp) {
-      this.addReceiveMessageListener({ type: target.type }, handler);
+    if (target === "*") {
+      this.addReceiveMessageListener<T>("*", handler, options);
+    } else if (target.type instanceof RegExp) {
+      this.addReceiveMessageListener<T>({ type: target.type }, handler);
     } else {
-      this.addReceiveMessageListener({ type: target.type }, handler, options);
+      this.addReceiveMessageListener<T>(
+        { type: target.type },
+        handler,
+        options,
+      );
     }
   }
 
@@ -281,14 +346,16 @@ class Pigeon {
    * Will be removed in v1.0.0.
    */
   public onSendMessage<T extends MessageBody = MessageBody>(
-    target: { type: string | RegExp },
+    target: "*" | { type: string | RegExp },
     handler: (message: SendMessage<T>) => void,
     options?: boolean | AddEventListenerOptions,
   ): void {
-    if (target.type instanceof RegExp) {
-      this.addSendMessageListener({ type: target.type }, handler);
+    if (target === "*") {
+      this.addSendMessageListener<T>("*", handler, options);
+    } else if (target.type instanceof RegExp) {
+      this.addSendMessageListener<T>({ type: target.type }, handler);
     } else {
-      this.addSendMessageListener({ type: target.type }, handler, options);
+      this.addSendMessageListener<T>({ type: target.type }, handler, options);
     }
   }
 
@@ -421,6 +488,14 @@ class Pigeon {
     if (options !== undefined) {
       console.warn(
         `${method}: \`options\` are ignored when \`type\` is a RegExp. Use a string \`type\` for native EventAPI options like \`once\` or \`signal\`.`,
+      );
+    }
+  }
+
+  private warnIfWildcardTypeObject(method: string, type: string): void {
+    if (type === "*") {
+      console.warn(
+        `${method}: \`{ type: "*" }\` is deprecated since v0.3.0 and will be removed in v1.0.0. Pass \`"*"\` directly as the first argument instead.`,
       );
     }
   }
