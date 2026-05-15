@@ -63,8 +63,8 @@ pigeon.addReceiveMessageListener("*", receiveHandler);
 A callback function that will be invoked when a matching message is received.
 
 - options
-  - boolean | AddEventListenerOptions Options are passed directly to
-    `addEventListener("pigeon:receive", ...)`.
+  - boolean | AddEventListenerOptions — same as the standard `addEventListener`
+    third argument (`once`, `signal`, etc.).
 
 ### `removeReceiveMessageListener(target, handler, options?)`
 
@@ -109,8 +109,8 @@ pigeon.addSendMessageListener("*", sendHandler);
 A callback function that will be invoked when a matching message is sent.
 
 - options
-  - boolean | AddEventListenerOptions Options are passed directly to
-    `addEventListener("pigeon:send", ...)`.
+  - boolean | AddEventListenerOptions — same as the standard `addEventListener`
+    third argument (`once`, `signal`, etc.).
 
 ### `removeSendMessageListener(target, handler, options?)`
 
@@ -158,11 +158,12 @@ Automatically replies with a pong message when `ping` is receivec.
   removed in v1.0.0. The change disambiguates "match every message" from a
   future filter-object API where omitting a key means "no constraint on that
   key".
-- Internal: messages are now dispatched as type-segmented events (e.g.
-  `pigeon:receive:{"type":"init"}`), instead of a single `pigeon:receive` event
-  with internal filtering. If you were calling
-  `window.addEventListener("pigeon:receive", ...)` directly, that event no
-  longer fires.
+- Bare `pigeon:receive` / `pigeon:send` events are no longer dispatched
+  (replaced by type-segmented events like `pigeon:receive:{"type":"init"}`).
+  Calling `window.addEventListener("pigeon:receive", ...)` doesn't break the
+  module — it just won't fire anymore. To listen for every message, use
+  `pigeon.addReceiveMessageListener("*", handler)` /
+  `pigeon.addSendMessageListener("*", handler)` instead.
 
 ## Deprecated APIs
 
