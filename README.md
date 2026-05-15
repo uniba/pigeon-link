@@ -158,10 +158,12 @@ Automatically replies with a pong message when `ping` is receivec.
   removed in v1.0.0. The change disambiguates "match every message" from a
   future filter-object API where omitting a key means "no constraint on that
   key".
-- Bare `pigeon:receive` / `pigeon:send` events are no longer dispatched
-  (replaced by type-segmented events like `pigeon:receive:{"type":"init"}`).
-  Calling `window.addEventListener("pigeon:receive", ...)` doesn't break the
-  module — it just won't fire anymore. To listen for every message, use
+- All `pigeon:receive` / `pigeon:send` events (the bare form and the new
+  type-segmented form like `pigeon:receive:{"type":"init"}`) are now dispatched
+  on a private `EventTarget` owned by each `Pigeon` instance, instead of on
+  `window` / `globalThis`. Calling
+  `window.addEventListener("pigeon:receive", ...)` doesn't break the module — it
+  just won't fire anymore. To listen for every message, use
   `pigeon.addReceiveMessageListener("*", handler)` /
   `pigeon.addSendMessageListener("*", handler)` instead.
 

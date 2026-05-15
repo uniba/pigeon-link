@@ -21,6 +21,13 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Multiple `Pigeon` instances no longer cross-pollute each other's listeners.
+  Previously every instance dispatched on the global event target and every
+  registered handler listened on the global event target, so a message arriving
+  on instance A would also fire instance B's handlers (and overwrite fields like
+  `B.id`). Each instance now owns a private `EventTarget`. As a side effect,
+  listeners are released when the instance is garbage-collected, fixing a latent
+  leak when callers discarded a `Pigeon` without calling `destroy()`.
 - `isConnected` is now reset to `false` when the underlying WebSocket emits
   `close` or `error`. Previously it stayed `true` after the socket dropped.
 - `{ once: true }` was previously consumed by the first received/sent message

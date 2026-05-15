@@ -18,11 +18,14 @@ class Pigeon {
   public isConnected: boolean;
   public socket: WebSocket;
 
+  private events = new EventTarget();
   private receiveListeners = new MessageListenerRegistry<ReceivedMessage>(
     "pigeon:receive",
+    this.events,
   );
   private sendListeners = new MessageListenerRegistry<SendMessage>(
     "pigeon:send",
+    this.events,
   );
 
   constructor(pigeonOptions: PigeonOptions) {
@@ -330,7 +333,7 @@ class Pigeon {
         filter[k] = message[k];
       }
       const eventName = `pigeon:receive:${normalizeFilter(filter)}`;
-      dispatchEvent(
+      this.events.dispatchEvent(
         new CustomEvent<ReceivedMessage>(eventName, { detail: message }),
       );
     }
@@ -345,7 +348,7 @@ class Pigeon {
         filter[k] = message[k];
       }
       const eventName = `pigeon:send:${normalizeFilter(filter)}`;
-      dispatchEvent(
+      this.events.dispatchEvent(
         new CustomEvent<SendMessage<T>>(eventName, { detail: message }),
       );
     }

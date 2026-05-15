@@ -1,12 +1,16 @@
 import { normalizeFilter } from "./filter.ts";
 
-// Owns the listener bookkeeping for a single base event name (e.g. "pigeon:receive").
-// Maps each user-supplied handler to the wrapped EventListener it was registered as,
-// so that remove* calls can find and unregister the right listener.
+// Owns the listener bookkeeping for a single base event name (e.g. "pigeon:receive")
+// on a given EventTarget. Maps each user-supplied handler to the wrapped
+// EventListener it was registered as, so that remove* calls can find and
+// unregister the right listener.
 export class MessageListenerRegistry<M extends { type: string }> {
   private map: Map<unknown, Map<string, EventListener>> = new Map();
 
-  constructor(private baseEventName: string) {}
+  constructor(
+    private baseEventName: string,
+    private target: EventTarget,
+  ) {}
 
   public addString(
     type: string,
@@ -19,7 +23,7 @@ export class MessageListenerRegistry<M extends { type: string }> {
 
     const wrapped = this.register(handler, eventName);
     if (!wrapped) return;
-    addEventListener(eventName, wrapped, options);
+    this.target.addEventListener(eventName, wrapped, options);
   }
 
   public addRegExp(
@@ -34,7 +38,7 @@ export class MessageListenerRegistry<M extends { type: string }> {
 
     const wrapped = this.register(handler, eventName, regex);
     if (!wrapped) return;
-    addEventListener(eventName, wrapped);
+    this.target.addEventListener(eventName, wrapped);
   }
 
   public removeString(
@@ -52,14 +56,14 @@ export class MessageListenerRegistry<M extends { type: string }> {
     this.unregister(eventName, handler);
   }
 
-  // Unregisters every wrapped listener this registry has added to the global
-  // event target. Note: listeners registered with `capture: true` won't be
-  // matched here; this is fine because capture has no meaning for our custom
-  // events on the global EventTarget (no DOM hierarchy).
+  // Unregisters every wrapped listener this registry has added to the target.
+  // Note: listeners registered with `capture: true` won't be matched here;
+  // this is fine because capture has no meaning for our custom events on a
+  // plain EventTarget (no DOM hierarchy).
   public removeAll(): void {
     for (const typeMap of this.map.values()) {
       for (const [eventName, wrapped] of typeMap) {
-        removeEventListener(eventName, wrapped);
+        this.target.removeEventListener(eventName, wrapped);
       }
     }
     this.map.clear();
@@ -106,7 +110,7 @@ export class MessageListenerRegistry<M extends { type: string }> {
     const wrapped = typeMap.get(eventName);
     if (!wrapped) return;
 
-    removeEventListener(eventName, wrapped, options);
+    this.target.removeEventListener(eventName, wrapped, options);
     typeMap.delete(eventName);
     if (typeMap.size === 0) {
       this.map.delete(handler);
