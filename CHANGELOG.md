@@ -18,6 +18,17 @@ All notable changes to this project will be documented in this file.
   `pigeon.addReceiveMessageListener("*", handler, { once: true })`).
 - `destroy()`: closes the socket and unregisters every listener this instance
   has added. Use it to release resources when the Pigeon will not be used again.
+- `addConnectListener` / `removeConnectListener`: subscribe to a
+  `pigeon:connect` event fired when the `init` handshake from the host
+  completes.
+- `addDisconnectListener` / `removeDisconnectListener`: subscribe to a
+  `pigeon:disconnect` event fired when the underlying WebSocket closes (cleanly,
+  mid-stream, or because the initial connection attempt failed). The handler
+  receives `{ code, reason, wasClean }` extracted from the `CloseEvent`. This
+  also gives callers a way to detect a failed initial connection, which
+  previously had no observable signal.
+- `DisconnectReason` type exported from `types.ts` for the disconnect handler
+  payload.
 
 ### Fixed
 

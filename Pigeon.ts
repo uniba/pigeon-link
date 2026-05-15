@@ -1,4 +1,5 @@
 import type {
+  DisconnectReason,
   MessageBody,
   PigeonOptions,
   ReceivedMessage,
@@ -27,6 +28,8 @@ class Pigeon {
     "pigeon:send",
     this.events,
   );
+  private connectMap: Map<unknown, EventListener> = new Map();
+  private disconnectMap: Map<unknown, EventListener> = new Map();
 
   constructor(pigeonOptions: PigeonOptions) {
     try {
@@ -57,8 +60,17 @@ class Pigeon {
         this.dispatchReceive(message);
       });
 
-      this.socket.addEventListener("close", () => {
+      this.socket.addEventListener("close", (e) => {
         this.isConnected = false;
+        this.events.dispatchEvent(
+          new CustomEvent<DisconnectReason>("pigeon:disconnect", {
+            detail: {
+              code: e.code,
+              reason: e.reason,
+              wasClean: e.wasClean,
+            },
+          }),
+        );
       });
 
       this.socket.addEventListener("error", () => {
@@ -72,6 +84,7 @@ class Pigeon {
         if (message.from === "host") {
           this.id = message.body.id;
           this.isConnected = true;
+          this.events.dispatchEvent(new CustomEvent("pigeon:connect"));
         }
       });
 
@@ -123,6 +136,8 @@ class Pigeon {
     this.socket.close();
     this.receiveListeners.removeAll();
     this.sendListeners.removeAll();
+    this.removeAllLifecycleListeners(this.connectMap, "pigeon:connect");
+    this.removeAllLifecycleListeners(this.disconnectMap, "pigeon:disconnect");
     this.isConnected = false;
   }
 
@@ -277,6 +292,112 @@ class Pigeon {
       this.warnIfWildcardTypeObject("removeSendMessageListener", target.type);
       this.sendListeners.removeString(target.type, handler, options);
     }
+  }
+
+  // ============================================================
+  // Connection lifecycle listeners
+  // ============================================================
+
+  /**
+   * Subscribes to the `connect` event, fired once the `init` handshake from
+   * the host completes (i.e. when `pigeon.id` and `pigeon.isConnected` become
+   * available). Re-subscribing the same handler is a no-op.
+   */
+  public addConnectListener(
+    handler: () => void,
+    options?: boolean | AddEventListenerOptions,
+  ): void {
+    this.addLifecycleListener(
+      this.connectMap,
+      "pigeon:connect",
+      handler,
+      options,
+    );
+  }
+
+  public removeConnectListener(
+    handler: () => void,
+    options?: boolean | EventListenerOptions,
+  ): void {
+    this.removeLifecycleListener(
+      this.connectMap,
+      "pigeon:connect",
+      handler,
+      options,
+    );
+  }
+
+  /**
+   * Subscribes to the `disconnect` event, fired when the underlying WebSocket
+   * closes (cleanly or otherwise — including the case where the initial
+   * connection attempt failed). The handler receives the close reason
+   * extracted from the WebSocket `CloseEvent`.
+   */
+  public addDisconnectListener(
+    handler: (reason: DisconnectReason) => void,
+    options?: boolean | AddEventListenerOptions,
+  ): void {
+    this.addLifecycleListener(
+      this.disconnectMap,
+      "pigeon:disconnect",
+      handler,
+      options,
+    );
+  }
+
+  public removeDisconnectListener(
+    handler: (reason: DisconnectReason) => void,
+    options?: boolean | EventListenerOptions,
+  ): void {
+    this.removeLifecycleListener(
+      this.disconnectMap,
+      "pigeon:disconnect",
+      handler,
+      options,
+    );
+  }
+
+  private addLifecycleListener<P>(
+    map: Map<unknown, EventListener>,
+    eventName: string,
+    handler: (payload: P) => void,
+    options?: boolean | AddEventListenerOptions,
+  ): void {
+    if (map.has(handler)) return;
+    const wrapped = (event: Event) => {
+      const payload = (event as CustomEvent<P>).detail;
+      queueMicrotask(() => {
+        try {
+          handler(payload);
+        } catch (e) {
+          console.error(`Error in ${eventName} handler:`, e);
+        }
+      });
+    };
+    map.set(handler, wrapped);
+    this.events.addEventListener(eventName, wrapped, options);
+  }
+
+  private removeLifecycleListener(
+    map: Map<unknown, EventListener>,
+    eventName: string,
+    handler: unknown,
+    options?: boolean | EventListenerOptions,
+  ): void {
+    const wrapped = map.get(handler);
+    if (!wrapped) return;
+    this.events.removeEventListener(eventName, wrapped, options);
+    map.delete(handler);
+  }
+
+  private removeAllLifecycleListeners(
+    map: Map<unknown, EventListener>,
+    eventName: string,
+  ): void {
+    for (const wrapped of map.values()) {
+      this.events.removeEventListener(eventName, wrapped);
+    }
+    map.clear();
   }
 
   // ============================================================

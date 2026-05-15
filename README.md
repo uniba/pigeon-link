@@ -123,6 +123,35 @@ pigeon.removeSendMessageListener({
 }, sendHandler);
 ```
 
+## Connection lifecycle
+
+### `addConnectListener(handler, options?)` / `removeConnectListener(handler, options?)`
+
+Fires when the `init` handshake from the host completes (i.e. when `pigeon.id`
+is assigned and `pigeon.isConnected` becomes `true`).
+
+```typescript
+pigeon.addConnectListener(() => {
+  console.log("connected as", pigeon.id);
+});
+```
+
+### `addDisconnectListener(handler, options?)` / `removeDisconnectListener(handler, options?)`
+
+Fires when the underlying WebSocket closes — cleanly, due to a network error
+mid-stream, or because the initial connection attempt failed. The handler
+receives a `{ code, reason, wasClean }` object extracted from the WebSocket
+`CloseEvent`.
+
+```typescript
+pigeon.addDisconnectListener(({ code, reason, wasClean }) => {
+  console.log("disconnected", { code, reason, wasClean });
+});
+```
+
+`options` for both APIs accepts the standard `addEventListener` third argument
+(`once`, `signal`, etc.).
+
 ## `destroy()`
 
 Closes the underlying WebSocket and unregisters every listener this instance has

@@ -46,3 +46,9 @@ export type SendMessage<T extends MessageBody = MessageBody> = {
   to: string[];
   type: string;
 };
+
+export type DisconnectReason = {
+  code: number;
+  reason: string;
+  wasClean: boolean;
+};
