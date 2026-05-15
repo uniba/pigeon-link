@@ -42,8 +42,18 @@ class Pigeon {
       this.isConnected = false;
 
       this.socket.addEventListener("message", (e) => {
-        const data = JSON.parse(e.data);
-        const message = parseReceiveMessage(data);
+        let message: ReceivedMessage;
+        try {
+          const data = JSON.parse(e.data);
+          message = parseReceiveMessage(data);
+        } catch (err) {
+          console.error(
+            "Pigeon: dropping malformed incoming message",
+            err,
+            e.data,
+          );
+          return;
+        }
         this.dispatchReceive(message);
       });
 
@@ -95,6 +105,11 @@ class Pigeon {
   public send<T extends MessageBody = MessageBody>(
     message: SendMessage<T>,
   ): void {
+    if (this.socket.readyState !== WebSocket.OPEN) {
+      throw new Error(
+        `Pigeon: cannot send while socket is not OPEN (readyState=${this.socket.readyState}). Wait for the socket to open or check \`pigeon.isConnected\` before calling \`send\`.`,
+      );
+    }
     this.socket.send(JSON.stringify(message));
     this.dispatchSend(message);
   }

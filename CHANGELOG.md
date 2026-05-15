@@ -30,6 +30,12 @@ All notable changes to this project will be documented in this file.
   leak when callers discarded a `Pigeon` without calling `destroy()`.
 - `isConnected` is now reset to `false` when the underlying WebSocket emits
   `close` or `error`. Previously it stayed `true` after the socket dropped.
+- Malformed incoming messages (invalid JSON, or JSON that doesn't match the
+  message schema) are now logged via `console.error` and dropped, instead of
+  surfacing as an uncaught error from the WebSocket message callback.
+- `send()` now throws a clear, Pigeon-specific error when the underlying socket
+  is not in the `OPEN` state, instead of letting the lower-level
+  `InvalidStateError` from `WebSocket.send` propagate.
 - `{ once: true }` was previously consumed by the first received/sent message
   regardless of its `type`, because a single `pigeon:receive` / `pigeon:send`
   event was used with internal filtering. String `type` filters now subscribe to
