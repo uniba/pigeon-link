@@ -44,6 +44,14 @@ class Pigeon {
         this.dispatchReceive(message);
       });
 
+      this.socket.addEventListener("close", () => {
+        this.isConnected = false;
+      });
+
+      this.socket.addEventListener("error", () => {
+        this.isConnected = false;
+      });
+
       this.addReceiveMessageListener<{
         id: string;
         clients: string[];
