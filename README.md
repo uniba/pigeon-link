@@ -1,5 +1,11 @@
 # Pigeon link
 
+> **v0.3.0 notice**:
+> - `onReceiveMessage` / `onSendMessage` are deprecated and will be removed in v1.0.0. Use `addReceiveMessageListener` / `addSendMessageListener` instead.
+> - **Breaking**: When `target.type` is a `RegExp`, the `options` argument is no longer accepted (enforced at the type level; ignored with a warning at runtime). Use a `string` `type` for native EventAPI options like `once` / `signal`.
+>
+> See [Migration to v0.3.0](#migration-to-v030) and [CHANGELOG.md](./CHANGELOG.md) for details.
+
 Pigeon link is a module for connecting to a Pigeon Room.
 
 ## Connect to Pigeon Room
@@ -28,7 +34,7 @@ pigeon.addReceiveMessageListener<T>({
     - type: string | RegExp
         - Specifies the type of message to listen for.
         - If a string is provided, it matches messages with the exact same type (use "*" as a wildcard to match all types).
-        - If a regular expression is provided, the handler will be triggered when the received message type matches the pattern.
+        - If a regular expression is provided, the handler will be triggered when the received message type matches the pattern. **Note**: with a `RegExp`, the `options` argument is not accepted (the underlying listener does internal filtering, which would consume options like `once` on filtered-out messages). Use a string `type` if you need EventAPI options.
 
 - handler
 ```typescript
@@ -62,7 +68,7 @@ pigeon.addSendMessageListener<T>({
     - type: string | RegExp
         - Specifies the type of message to listen for.
         - If a string is provided, it matches messages with the exact same type (use "*" as a wildcard to match all types).
-        - If a regular expression is provided, the handler will be triggered when the sent message type matches the pattern.
+        - If a regular expression is provided, the handler will be triggered when the sent message type matches the pattern. **Note**: with a `RegExp`, the `options` argument is not accepted (the underlying listener does internal filtering, which would consume options like `once` on filtered-out messages). Use a string `type` if you need EventAPI options.
 
 - handler
 ```typescript
@@ -87,6 +93,12 @@ pigeon.removeSendMessageListener({
 ## Auto send pong on receive ping
 
 Automatically replies with a pong message when `ping` is receivec.
+
+## Migration to v0.3.0
+
+- `onReceiveMessage` / `onSendMessage` are now deprecated. Replace them with `addReceiveMessageListener` / `addSendMessageListener`. The deprecated methods are still available as aliases until v1.0.0.
+- **Breaking**: `addReceiveMessageListener` / `addSendMessageListener` (and the deprecated aliases) no longer accept the `options` argument when `target.type` is a `RegExp`. Calling with both will fail to type-check, and at runtime the `options` argument is silently ignored with a `console.warn`. Use a `string` `type` if you need EventAPI options.
+- Internal: messages are now dispatched as type-segmented events (e.g. `pigeon:receive:{"type":"init"}`), instead of a single `pigeon:receive` event with internal filtering. If you were calling `window.addEventListener("pigeon:receive", ...)` directly, that event no longer fires.
 
 ## Deprecated APIs
 
