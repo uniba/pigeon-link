@@ -1,45 +1,29 @@
-import {
-  isMessageBody,
-  type MessageBody,
-  type PigeonOptions,
-  type ReceivedMessage,
-  type SendMessage,
+import type {
+  MessageBody,
+  PigeonOptions,
+  ReceivedMessage,
+  SendMessage,
 } from "./types.ts";
-
-// Keys of a message that can be used as filter conditions.
-// Adding a key here automatically expands the dispatched event combinations.
-const RECEIVE_FILTERABLE_KEYS = ["type"] as const;
-const SEND_FILTERABLE_KEYS = ["type"] as const;
-
-const normalizeFilter = (filter: Record<string, string>): string => {
-  const sorted: Record<string, string> = {};
-  Object.keys(filter).sort().forEach((k) => {
-    sorted[k] = filter[k];
-  });
-  return JSON.stringify(sorted);
-};
-
-const generateSubsets = <T>(items: readonly T[]): T[][] => {
-  const result: T[][] = [];
-  for (let i = 0; i < (1 << items.length); i++) {
-    const subset: T[] = [];
-    items.forEach((item, idx) => {
-      if (i & (1 << idx)) subset.push(item);
-    });
-    result.push(subset);
-  }
-  return result;
-};
-
-type ListenerMap = Map<unknown, Map<string, EventListener>>;
+import {
+  generateSubsets,
+  normalizeFilter,
+  RECEIVE_FILTERABLE_KEYS,
+  SEND_FILTERABLE_KEYS,
+} from "./_internal/filter.ts";
+import { parseReceiveMessage } from "./_internal/parseMessage.ts";
+import { MessageListenerRegistry } from "./_internal/MessageListenerRegistry.ts";
 
 class Pigeon {
   public id: string | undefined;
   public isConnected: boolean;
   public socket: WebSocket;
 
-  private receiveListenerMap: ListenerMap = new Map();
-  private sendListenerMap: ListenerMap = new Map();
+  private receiveListeners = new MessageListenerRegistry<ReceivedMessage>(
+    "pigeon:receive",
+  );
+  private sendListeners = new MessageListenerRegistry<SendMessage>(
+    "pigeon:send",
+  );
 
   constructor(pigeonOptions: PigeonOptions) {
     try {
@@ -56,7 +40,7 @@ class Pigeon {
 
       this.socket.addEventListener("message", (e) => {
         const data = JSON.parse(e.data);
-        const message = this.parseReceiveMessage(data);
+        const message = parseReceiveMessage(data);
         this.dispatchReceive(message);
       });
 
@@ -128,28 +112,22 @@ class Pigeon {
     options?: boolean | AddEventListenerOptions,
   ): void {
     if (target === "*") {
-      this.addStringListener<ReceivedMessage<T>>(
-        "pigeon:receive",
-        this.receiveListenerMap,
+      this.receiveListeners.addString(
         "*",
-        handler,
+        handler as (message: ReceivedMessage) => void,
         options,
       );
     } else if (target.type instanceof RegExp) {
       this.warnIfOptionsWithRegExp("addReceiveMessageListener", options);
-      this.addRegExpListener<ReceivedMessage<T>>(
-        "pigeon:receive",
-        this.receiveListenerMap,
+      this.receiveListeners.addRegExp(
         target.type,
-        handler,
+        handler as (message: ReceivedMessage) => void,
       );
     } else {
       this.warnIfWildcardTypeObject("addReceiveMessageListener", target.type);
-      this.addStringListener<ReceivedMessage<T>>(
-        "pigeon:receive",
-        this.receiveListenerMap,
+      this.receiveListeners.addString(
         target.type,
-        handler,
+        handler as (message: ReceivedMessage) => void,
         options,
       );
     }
@@ -175,32 +153,16 @@ class Pigeon {
     options?: boolean | EventListenerOptions,
   ): void {
     if (target === "*") {
-      this.removeStringListener(
-        "pigeon:receive",
-        this.receiveListenerMap,
-        "*",
-        handler,
-        options,
-      );
+      this.receiveListeners.removeString("*", handler, options);
     } else if (target.type instanceof RegExp) {
       this.warnIfOptionsWithRegExp("removeReceiveMessageListener", options);
-      this.removeRegExpListener(
-        "pigeon:receive",
-        this.receiveListenerMap,
-        handler,
-      );
+      this.receiveListeners.removeRegExp(handler);
     } else {
       this.warnIfWildcardTypeObject(
         "removeReceiveMessageListener",
         target.type,
       );
-      this.removeStringListener(
-        "pigeon:receive",
-        this.receiveListenerMap,
-        target.type,
-        handler,
-        options,
-      );
+      this.receiveListeners.removeString(target.type, handler, options);
     }
   }
 
@@ -228,28 +190,22 @@ class Pigeon {
     options?: boolean | AddEventListenerOptions,
   ): void {
     if (target === "*") {
-      this.addStringListener<SendMessage<T>>(
-        "pigeon:send",
-        this.sendListenerMap,
+      this.sendListeners.addString(
         "*",
-        handler,
+        handler as (message: SendMessage) => void,
         options,
       );
     } else if (target.type instanceof RegExp) {
       this.warnIfOptionsWithRegExp("addSendMessageListener", options);
-      this.addRegExpListener<SendMessage<T>>(
-        "pigeon:send",
-        this.sendListenerMap,
+      this.sendListeners.addRegExp(
         target.type,
-        handler,
+        handler as (message: SendMessage) => void,
       );
     } else {
       this.warnIfWildcardTypeObject("addSendMessageListener", target.type);
-      this.addStringListener<SendMessage<T>>(
-        "pigeon:send",
-        this.sendListenerMap,
+      this.sendListeners.addString(
         target.type,
-        handler,
+        handler as (message: SendMessage) => void,
         options,
       );
     }
@@ -275,29 +231,13 @@ class Pigeon {
     options?: boolean | EventListenerOptions,
   ): void {
     if (target === "*") {
-      this.removeStringListener(
-        "pigeon:send",
-        this.sendListenerMap,
-        "*",
-        handler,
-        options,
-      );
+      this.sendListeners.removeString("*", handler, options);
     } else if (target.type instanceof RegExp) {
       this.warnIfOptionsWithRegExp("removeSendMessageListener", options);
-      this.removeRegExpListener(
-        "pigeon:send",
-        this.sendListenerMap,
-        handler,
-      );
+      this.sendListeners.removeRegExp(handler);
     } else {
       this.warnIfWildcardTypeObject("removeSendMessageListener", target.type);
-      this.removeStringListener(
-        "pigeon:send",
-        this.sendListenerMap,
-        target.type,
-        handler,
-        options,
-      );
+      this.sendListeners.removeString(target.type, handler, options);
     }
   }
 
@@ -391,99 +331,6 @@ class Pigeon {
     }
   }
 
-  // ============================================================
-  // Internal: listener registration
-  // ============================================================
-
-  private addStringListener<M>(
-    baseEventName: "pigeon:receive" | "pigeon:send",
-    map: ListenerMap,
-    type: string,
-    handler: (message: M) => void,
-    options?: boolean | AddEventListenerOptions,
-  ): void {
-    // Wildcard "*" subscribes to the empty filter (i.e. every message).
-    const filter: Record<string, string> = type === "*" ? {} : { type };
-    const eventName = `${baseEventName}:${normalizeFilter(filter)}`;
-
-    let typeMap = map.get(handler);
-    if (!typeMap) {
-      typeMap = new Map();
-      map.set(handler, typeMap);
-    }
-    // Already registered for the same (handler, eventName) pair: ignore (matches addEventListener semantics).
-    if (typeMap.has(eventName)) return;
-
-    const wrapped = (event: Event) => {
-      const message = (event as CustomEvent<M>).detail;
-      queueMicrotask(() => {
-        try {
-          handler(message);
-        } catch (e) {
-          console.error(`Error in ${baseEventName} handler:`, e);
-        }
-      });
-    };
-    typeMap.set(eventName, wrapped);
-    addEventListener(eventName, wrapped, options);
-  }
-
-  private addRegExpListener<M extends { type: string }>(
-    baseEventName: "pigeon:receive" | "pigeon:send",
-    map: ListenerMap,
-    regex: RegExp,
-    handler: (message: M) => void,
-  ): void {
-    // RegExp filters subscribe to the all-messages event and filter internally.
-    // Native EventAPI options (once / signal / etc) are intentionally not
-    // supported here, because internal filtering would consume those options
-    // on filtered-out messages. Use a string `type` if option support is needed.
-    const eventName = `${baseEventName}:{}`;
-
-    let typeMap = map.get(handler);
-    if (!typeMap) {
-      typeMap = new Map();
-      map.set(handler, typeMap);
-    }
-    if (typeMap.has(eventName)) return;
-
-    const wrapped = (event: Event) => {
-      const message = (event as CustomEvent<M>).detail;
-      if (regex.test(message.type)) {
-        queueMicrotask(() => {
-          try {
-            handler(message);
-          } catch (e) {
-            console.error(`Error in ${baseEventName} handler:`, e);
-          }
-        });
-      }
-    };
-    typeMap.set(eventName, wrapped);
-    addEventListener(eventName, wrapped);
-  }
-
-  private removeStringListener(
-    baseEventName: "pigeon:receive" | "pigeon:send",
-    map: ListenerMap,
-    type: string,
-    handler: unknown,
-    options?: boolean | EventListenerOptions,
-  ): void {
-    const filter: Record<string, string> = type === "*" ? {} : { type };
-    const eventName = `${baseEventName}:${normalizeFilter(filter)}`;
-    this.removeListenerByEventName(map, eventName, handler, options);
-  }
-
-  private removeRegExpListener(
-    baseEventName: "pigeon:receive" | "pigeon:send",
-    map: ListenerMap,
-    handler: unknown,
-  ): void {
-    const eventName = `${baseEventName}:{}`;
-    this.removeListenerByEventName(map, eventName, handler);
-  }
-
   private warnIfOptionsWithRegExp(method: string, options: unknown): void {
     if (options !== undefined) {
       console.warn(
@@ -498,54 +345,6 @@ class Pigeon {
         `${method}: \`{ type: "*" }\` is deprecated since v0.3.0 and will be removed in v1.0.0. Pass \`"*"\` directly as the first argument instead.`,
       );
     }
-  }
-
-  private removeListenerByEventName(
-    map: ListenerMap,
-    eventName: string,
-    handler: unknown,
-    options?: boolean | EventListenerOptions,
-  ): void {
-    const typeMap = map.get(handler);
-    if (!typeMap) return;
-
-    const wrapped = typeMap.get(eventName);
-    if (!wrapped) return;
-
-    removeEventListener(eventName, wrapped, options);
-    typeMap.delete(eventName);
-    if (typeMap.size === 0) {
-      map.delete(handler);
-    }
-  }
-
-  private parseReceiveMessage<T extends MessageBody>(
-    message: unknown,
-  ): ReceivedMessage<T> {
-    const error = new Error(
-      `Uncaught SyntaxError: ${String(message)} is not valid Message`,
-    );
-    if (typeof message !== "object" || message === null) throw error;
-    if (!("address" in message) || typeof message.address !== "string") {
-      throw error;
-    }
-    if (!("from" in message) || typeof message.from !== "string") throw error;
-    if (!("timestamp" in message) || typeof message.timestamp !== "number") {
-      throw error;
-    }
-    if (!("to" in message) || !Array.isArray(message.to)) throw error;
-    if (!message.to.every((to) => typeof to === "string")) throw error;
-    if (!("type" in message) || typeof message.type !== "string") throw error;
-    if (!("body" in message) || !isMessageBody(message.body)) throw error;
-
-    return {
-      address: message.address,
-      from: message.from,
-      to: message.to,
-      timestamp: message.timestamp,
-      type: message.type,
-      body: message.body as unknown as T,
-    };
   }
 }
 
