@@ -38,13 +38,17 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- Multiple `Pigeon` instances no longer cross-pollute each other's listeners.
-  Previously every instance dispatched on the global event target and every
-  registered handler listened on the global event target, so a message arriving
-  on instance A would also fire instance B's handlers (and overwrite fields like
-  `B.id`). Each instance now owns a private `EventTarget`. As a side effect,
-  listeners are released when the instance is garbage-collected, fixing a latent
-  leak when callers discarded a `Pigeon` without calling `destroy()`.
+- Multiple `Pigeon` instances no longer cross-pollute each other's internal
+  state. Previously internal handlers (the `init` handshake, the ping responder)
+  listened on the global event target, so a message arriving on instance A would
+  overwrite `B.id`. Internal handlers and `add*Listener` registrations now live
+  on each instance's private `EventTarget`. Bare `pigeon:receive` /
+  `pigeon:send` events are still dispatched on `globalThis` (so
+  `window.addEventListener("pigeon:receive", ...)` keeps working as in v0.2.0);
+  the new type-segmented form (`pigeon:receive:{...}`) is per-instance only. As
+  a side effect, `add*Listener`-registered handlers are released when the
+  instance is garbage-collected, fixing the latent leak from `onReceiveMessage`
+  callers who discarded a `Pigeon` without calling `destroy()`.
 - `isConnected` is now reset to `false` when the underlying WebSocket emits
   `close` or `error`. Previously it stayed `true` after the socket dropped.
 - Malformed incoming messages (invalid JSON, or JSON that doesn't match the

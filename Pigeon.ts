@@ -536,6 +536,13 @@ class Pigeon {
         new CustomEvent<ReceivedMessage>(eventName, { detail: message }),
       );
     }
+    // Also broadcast the bare event on globalThis for v0.2.0 compatibility
+    // (e.g. `window.addEventListener("pigeon:receive", ...)`). Internal
+    // handlers live on `this.events`, so this broadcast does not feed back
+    // into per-instance state.
+    globalThis.dispatchEvent(
+      new CustomEvent<ReceivedMessage>("pigeon:receive", { detail: message }),
+    );
   }
 
   private dispatchSend<T extends MessageBody>(
@@ -551,6 +558,9 @@ class Pigeon {
         new CustomEvent<SendMessage<T>>(eventName, { detail: message }),
       );
     }
+    globalThis.dispatchEvent(
+      new CustomEvent<SendMessage<T>>("pigeon:send", { detail: message }),
+    );
   }
 
   private warnIfOptionsWithRegExp(method: string, options: unknown): void {

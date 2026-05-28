@@ -167,6 +167,11 @@ unmount, etc.) to release resources promptly.
 pigeon.destroy();
 ```
 
+Note: listeners you register directly on `window` / `globalThis` (e.g.
+`window.addEventListener("pigeon:receive", ...)`) are outside this instance's
+bookkeeping and will not be removed by `destroy()` — call `removeEventListener`
+yourself.
+
 ## Auto send pong on receive ping
 
 Automatically replies with a pong message when `ping` is receivec.
@@ -192,14 +197,6 @@ Automatically replies with a pong message when `ping` is receivec.
   removed in v1.0.0. The change disambiguates "match every message" from a
   future filter-object API where omitting a key means "no constraint on that
   key".
-- All `pigeon:receive` / `pigeon:send` events (the bare form and the new
-  type-segmented form like `pigeon:receive:{"type":"init"}`) are now dispatched
-  on a private `EventTarget` owned by each `Pigeon` instance, instead of on
-  `window` / `globalThis`. Calling
-  `window.addEventListener("pigeon:receive", ...)` doesn't break the module — it
-  just won't fire anymore. To listen for every message, use
-  `pigeon.addReceiveMessageListener("*", handler)` /
-  `pigeon.addSendMessageListener("*", handler)` instead.
 
 ## Deprecated APIs
 
