@@ -1,4 +1,4 @@
-name: Publish Dry Run
+name: Publish to JSR
 on:
   push:
     tags:
