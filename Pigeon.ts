@@ -28,7 +28,7 @@ class Pigeon {
   private autoReconnectMaxAttempts: number;
   private destroyed = false;
   private reconnectAttempts = 0;
-  private reconnectTimer: number | undefined;
+  private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 
   private events = new EventTarget();
   private receiveListeners = new MessageListenerRegistry<ReceivedMessage>(
