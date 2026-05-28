@@ -14,10 +14,21 @@ import {
 import { parseReceiveMessage } from "./_internal/parseMessage.ts";
 import { MessageListenerRegistry } from "./_internal/MessageListenerRegistry.ts";
 
+const RECONNECT_INITIAL_DELAY = 500;
+const RECONNECT_MAX_DELAY = 30000;
+const RECONNECT_BACKOFF_FACTOR = 2;
+
 class Pigeon {
   public id: string | undefined;
-  public isConnected: boolean;
-  public socket: WebSocket;
+  public isConnected: boolean = false;
+  public socket!: WebSocket;
+
+  private options: PigeonOptions;
+  private autoReconnect: boolean;
+  private autoReconnectMaxAttempts: number;
+  private destroyed = false;
+  private reconnectAttempts = 0;
+  private reconnectTimer: number | undefined;
 
   private events = new EventTarget();
   private receiveListeners = new MessageListenerRegistry<ReceivedMessage>(
@@ -32,71 +43,118 @@ class Pigeon {
   private disconnectMap: Map<unknown, EventListener> = new Map();
 
   constructor(pigeonOptions: PigeonOptions) {
+    console.log("pigeon link v0.3.0");
+    this.options = pigeonOptions;
+    const ar = pigeonOptions.autoReconnect;
+    if (!ar) {
+      this.autoReconnect = false;
+      this.autoReconnectMaxAttempts = 0;
+    } else {
+      this.autoReconnect = true;
+      this.autoReconnectMaxAttempts =
+        (ar === true ? undefined : ar.maxAttempts) ?? Infinity;
+    }
+
     try {
-      this.socket = new WebSocket(
-        pigeonOptions.baseUrl +
-          "?address=" +
-          pigeonOptions.address +
-          (pigeonOptions.staticId
-            ? "&initas=" + encodeURIComponent(pigeonOptions.staticId)
-            : ""),
-      );
-
-      this.isConnected = false;
-
-      this.socket.addEventListener("message", (e) => {
-        let message: ReceivedMessage;
-        try {
-          const data = JSON.parse(e.data);
-          message = parseReceiveMessage(data);
-        } catch (err) {
-          console.error(
-            "Pigeon: dropping malformed incoming message",
-            err,
-            e.data,
-          );
-          return;
-        }
-        this.dispatchReceive(message);
-      });
-
-      this.socket.addEventListener("close", (e) => {
-        this.isConnected = false;
-        this.events.dispatchEvent(
-          new CustomEvent<DisconnectReason>("pigeon:disconnect", {
-            detail: {
-              code: e.code,
-              reason: e.reason,
-              wasClean: e.wasClean,
-            },
-          }),
-        );
-      });
-
-      this.socket.addEventListener("error", () => {
-        this.isConnected = false;
-      });
-
-      this.addReceiveMessageListener<{
-        id: string;
-        clients: string[];
-      }>({ type: "init" }, (message) => {
-        if (message.from === "host") {
-          this.id = message.body.id;
-          this.isConnected = true;
-          this.events.dispatchEvent(new CustomEvent("pigeon:connect"));
-        }
-      });
-
-      this.addReceiveMessageListener({ type: "ping" }, (message) => {
-        this.pong([message.from]);
-      });
+      this.openSocket();
     } catch (e) {
       if (e instanceof Error) {
         throw e;
       }
       throw new Error("unknown error");
     }
+
+    this.addReceiveMessageListener<{
+      id: string;
+      clients: string[];
+    }>({ type: "init" }, (message) => {
+      if (message.from === "host") {
+        this.id = message.body.id;
+        this.isConnected = true;
+        this.reconnectAttempts = 0;
+        this.events.dispatchEvent(new CustomEvent("pigeon:connect"));
+      }
+    });
+
+    this.addReceiveMessageListener({ type: "ping" }, (message) => {
+      this.pong([message.from]);
+    });
+  }
+
+  private openSocket(): void {
+    const url = this.options.baseUrl +
+      "?address=" +
+      this.options.address +
+      (this.options.staticId
+        ? "&initas=" + encodeURIComponent(this.options.staticId)
+        : "");
+
+    this.socket = new WebSocket(url);
+
+    this.socket.addEventListener("message", (e) => {
+      let message: ReceivedMessage;
+      try {
+        const data = JSON.parse(e.data);
+        message = parseReceiveMessage(data);
+      } catch (err) {
+        console.error(
+          "Pigeon: dropping malformed incoming message",
+          err,
+          e.data,
+        );
+        return;
+      }
+      this.dispatchReceive(message);
+    });
+
+    this.socket.addEventListener("close", (e) => {
+      this.isConnected = false;
+      if (this.destroyed) return;
+      this.events.dispatchEvent(
+        new CustomEvent<DisconnectReason>("pigeon:disconnect", {
+          detail: {
+            code: e.code,
+            reason: e.reason,
+            wasClean: e.wasClean,
+          },
+        }),
+      );
+      this.scheduleReconnect();
+    });
+
+    this.socket.addEventListener("error", () => {
+      this.isConnected = false;
+    });
+  }
+
+  private scheduleReconnect(): void {
+    if (this.destroyed) return;
+    if (!this.autoReconnect) return;
+    if (this.reconnectAttempts >= this.autoReconnectMaxAttempts) {
+      console.warn(
+        `Pigeon: reached max reconnect attempts (${this.autoReconnectMaxAttempts}); giving up`,
+      );
+      return;
+    }
+    const delay = Math.min(
+      RECONNECT_INITIAL_DELAY *
+        RECONNECT_BACKOFF_FACTOR ** this.reconnectAttempts,
+      RECONNECT_MAX_DELAY,
+    );
+    this.reconnectAttempts++;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = undefined;
+      if (this.destroyed) return;
+      try {
+        this.openSocket();
+      } catch (e) {
+        console.error(
+          "Pigeon: failed to construct WebSocket during reconnect",
+          e,
+        );
+        this.scheduleReconnect();
+      }
+    }, delay);
   }
 
   public pong(to: string[]) {
@@ -133,6 +191,11 @@ class Pigeon {
    * route change or component unmount) to release resources promptly.
    */
   public destroy(): void {
+    this.destroyed = true;
+    if (this.reconnectTimer !== undefined) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = undefined;
+    }
     this.socket.close();
     this.receiveListeners.removeAll();
     this.sendListeners.removeAll();

@@ -23,8 +23,13 @@ const pigeon = new Pigeon({
   baseUrl: "wss://your-pigeon-room/pigeon",
   address: "address",
   staticId: "staticid", // optional
+  autoReconnect: true, // optional
 });
 ```
+
+Note: with `autoReconnect`, a new client id is assigned on each reconnect unless
+`staticId` is specified. Re-read it from `pigeon.id` after reconnect (e.g.
+inside `addConnectListener`).
 
 ## Listen for message events
 

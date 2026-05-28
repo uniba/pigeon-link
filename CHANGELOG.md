@@ -29,6 +29,12 @@ All notable changes to this project will be documented in this file.
   previously had no observable signal.
 - `DisconnectReason` type exported from `types.ts` for the disconnect handler
   payload.
+- `autoReconnect` option on `PigeonOptions`: pass `true` (or `{ maxAttempts }`)
+  to automatically re-open the WebSocket on close using exponential backoff
+  (500ms doubling up to 30s). Listeners are preserved across reconnects. The
+  attempt counter resets when the `init` handshake completes. `destroy()`
+  permanently stops reconnect attempts.
+- `AutoReconnectOptions` type exported from `types.ts`.
 
 ### Fixed
 
