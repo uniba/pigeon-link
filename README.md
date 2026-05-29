@@ -157,6 +157,40 @@ pigeon.addDisconnectListener(({ code, reason, wasClean }) => {
 `options` for both APIs accepts the standard `addEventListener` third argument
 (`once`, `signal`, etc.).
 
+## `close()`
+
+Deliberately closes the underlying WebSocket and stops auto-reconnect, while
+keeping the instance and its listeners intact. Use it for an app-initiated
+disconnect (e.g. the user logged out) where registered listeners should still
+observe the `disconnect` event.
+
+```typescript
+pigeon.close();
+```
+
+With `autoReconnect` enabled, an ordinary close — including a clean close
+initiated by the peer — does **not** reconnect; only an unclean drop (network
+error, etc.) does. `close()` additionally cancels any pending reconnect attempt,
+so it is the way to stop the reconnect loop without discarding the instance.
+
+## `reopen()`
+
+Re-opens the connection after a `close()`, reusing the same options and the
+already-registered listeners — the counterpart to `close()`. Use it to
+reconnect to the same room without recreating the instance (e.g. the user logs
+back in).
+
+```typescript
+pigeon.close();
+// ...later
+pigeon.reopen();
+```
+
+It is a no-op while a socket is still `OPEN` or `CONNECTING`, so calling it on a
+live connection will not orphan the current socket. As with `autoReconnect`, a
+fresh client id is assigned on rejoin unless `staticId` was specified; re-read it
+from `pigeon.id` after reconnecting.
+
 ## `destroy()`
 
 Closes the underlying WebSocket and unregisters every listener this instance has

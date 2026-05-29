@@ -5,7 +5,7 @@ on:
       - 'v*'
 
 jobs:
-  dry-run:
+  publish:
     runs-on: ubuntu-latest
     permissions:
       contents: read
