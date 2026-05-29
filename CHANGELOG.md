@@ -16,6 +16,13 @@ All notable changes to this project will be documented in this file.
 - `"*"` literal as the first argument of the listener APIs to match every
   message (e.g.
   `pigeon.addReceiveMessageListener("*", handler, { once: true })`).
+- `close()`: deliberately closes the socket and stops auto-reconnect while
+  keeping the instance and its listeners intact, for an app-initiated disconnect
+  where listeners should still observe the `disconnect` event.
+- `reopen()`: re-opens the connection after a `close()`, reusing the same
+  options and already-registered listeners. No-op while a socket is still `OPEN`
+  or `CONNECTING`, so it cannot orphan a live socket. The counterpart to
+  `close()`.
 - `destroy()`: closes the socket and unregisters every listener this instance
   has added. Use it to release resources when the Pigeon will not be used again.
 - `addConnectListener` / `removeConnectListener`: subscribe to a
@@ -30,10 +37,11 @@ All notable changes to this project will be documented in this file.
 - `DisconnectReason` type exported from `types.ts` for the disconnect handler
   payload.
 - `autoReconnect` option on `PigeonOptions`: pass `true` (or `{ maxAttempts }`)
-  to automatically re-open the WebSocket on close using exponential backoff
-  (500ms doubling up to 30s). Listeners are preserved across reconnects. The
-  attempt counter resets when the `init` handshake completes. `destroy()`
-  permanently stops reconnect attempts.
+  to automatically re-open the WebSocket on an unclean close using exponential
+  backoff (500ms doubling up to 30s). A clean close (this instance's `close()`,
+  or a clean close initiated by the peer) does not reconnect. Listeners are
+  preserved across reconnects. The attempt counter resets when the `init`
+  handshake completes. `close()` and `destroy()` stop reconnect attempts.
 - `AutoReconnectOptions` type exported from `types.ts`.
 
 ### Fixed
