@@ -27,6 +27,7 @@ class Pigeon {
   private autoReconnect: boolean;
   private autoReconnectMaxAttempts: number;
   private destroyed = false;
+  private intentionalClose = false;
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -119,6 +120,15 @@ class Pigeon {
           },
         }),
       );
+      // Do not reconnect when the close was deliberate: either this instance
+      // called `close()`, or the peer closed the connection cleanly. The
+      // `intentionalClose` flag also covers a connecting socket aborted by
+      // `close()`, which surfaces as `wasClean === false`.
+      if (this.intentionalClose) {
+        this.intentionalClose = false;
+        return;
+      }
+      if (e.wasClean) return;
       this.scheduleReconnect();
     });
 
@@ -183,6 +193,26 @@ class Pigeon {
     }
     this.socket.send(JSON.stringify(message));
     this.dispatchSend(message);
+  }
+
+  /**
+   * Deliberately closes the underlying WebSocket and stops auto-reconnect,
+   * without tearing down listeners. Use this for an app-initiated disconnect
+   * (e.g. the user logged out) where you still want the registered listeners
+   * to observe the `disconnect` event. Unlike `destroy()`, the instance and
+   * its listeners stay intact.
+   *
+   * A pending reconnect attempt, if any, is cancelled. No reconnect is
+   * scheduled for the resulting close even when `autoReconnect` is enabled.
+   */
+  public close(): void {
+    if (this.destroyed) return;
+    this.intentionalClose = true;
+    if (this.reconnectTimer !== undefined) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = undefined;
+    }
+    this.socket.close();
   }
 
   /**

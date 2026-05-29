@@ -157,6 +157,22 @@ pigeon.addDisconnectListener(({ code, reason, wasClean }) => {
 `options` for both APIs accepts the standard `addEventListener` third argument
 (`once`, `signal`, etc.).
 
+## `close()`
+
+Deliberately closes the underlying WebSocket and stops auto-reconnect, while
+keeping the instance and its listeners intact. Use it for an app-initiated
+disconnect (e.g. the user logged out) where registered listeners should still
+observe the `disconnect` event.
+
+```typescript
+pigeon.close();
+```
+
+With `autoReconnect` enabled, an ordinary close — including a clean close
+initiated by the peer — does **not** reconnect; only an unclean drop (network
+error, etc.) does. `close()` additionally cancels any pending reconnect attempt,
+so it is the way to stop the reconnect loop without discarding the instance.
+
 ## `destroy()`
 
 Closes the underlying WebSocket and unregisters every listener this instance has
