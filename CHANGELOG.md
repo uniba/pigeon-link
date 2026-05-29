@@ -19,6 +19,10 @@ All notable changes to this project will be documented in this file.
 - `close()`: deliberately closes the socket and stops auto-reconnect while
   keeping the instance and its listeners intact, for an app-initiated disconnect
   where listeners should still observe the `disconnect` event.
+- `reopen()`: re-opens the connection after a `close()`, reusing the same
+  options and already-registered listeners. No-op while a socket is still `OPEN`
+  or `CONNECTING`, so it cannot orphan a live socket. The counterpart to
+  `close()`.
 - `destroy()`: closes the socket and unregisters every listener this instance
   has added. Use it to release resources when the Pigeon will not be used again.
 - `addConnectListener` / `removeConnectListener`: subscribe to a

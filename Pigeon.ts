@@ -30,6 +30,7 @@ class Pigeon {
   private intentionalClose = false;
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  private socketAbort: AbortController | undefined;
 
   private events = new EventTarget();
   private receiveListeners = new MessageListenerRegistry<ReceivedMessage>(
@@ -83,6 +84,17 @@ class Pigeon {
   }
 
   private openSocket(): void {
+    // Entering a new socket generation: detach the previous socket's
+    // listeners and drop any stale `intentionalClose` latch. Otherwise a
+    // still-closing old socket can fire a late `close` that pollutes the new
+    // generation (spurious disconnect), and a leftover `intentionalClose`
+    // could be consumed by an unrelated failing socket (suppressing a
+    // reconnect that should happen).
+    this.socketAbort?.abort();
+    this.intentionalClose = false;
+    this.socketAbort = new AbortController();
+    const { signal } = this.socketAbort;
+
     const url = this.options.baseUrl +
       "?address=" +
       this.options.address +
@@ -106,7 +118,7 @@ class Pigeon {
         return;
       }
       this.dispatchReceive(message);
-    });
+    }, { signal });
 
     this.socket.addEventListener("close", (e) => {
       this.isConnected = false;
@@ -130,11 +142,11 @@ class Pigeon {
       }
       if (e.wasClean) return;
       this.scheduleReconnect();
-    });
+    }, { signal });
 
     this.socket.addEventListener("error", () => {
       this.isConnected = false;
-    });
+    }, { signal });
   }
 
   private scheduleReconnect(): void {
@@ -216,6 +228,24 @@ class Pigeon {
   }
 
   /**
+   * Re-opens the connection after a `close()` (or any non-destroyed close),
+   * reusing the same options and the already-registered listeners. Use this to
+   * reconnect to the same room without recreating the instance.
+   *
+   * No-op if the instance is destroyed, or if a socket is already `OPEN` or
+   * `CONNECTING` (so calling it on a live connection cannot orphan the current
+   * socket). The reconnect backoff counter is reset. Identity continuity is
+   * governed by `staticId`: without it the server assigns a fresh id on rejoin.
+   */
+  public reopen(): void {
+    if (this.destroyed) return;
+    const rs = this.socket?.readyState;
+    if (rs === WebSocket.OPEN || rs === WebSocket.CONNECTING) return;
+    this.reconnectAttempts = 0;
+    this.openSocket();
+  }
+
+  /**
    * Closes the socket and unregisters every listener this instance has
    * registered. Call this when the Pigeon will not be used again (e.g. on
    * route change or component unmount) to release resources promptly.
@@ -226,6 +256,7 @@ class Pigeon {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = undefined;
     }
+    this.socketAbort?.abort();
     this.socket.close();
     this.receiveListeners.removeAll();
     this.sendListeners.removeAll();
