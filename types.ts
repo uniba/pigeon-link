@@ -2,6 +2,15 @@ export type PigeonOptions = {
   baseUrl: string;
   address: string;
   staticId?: string;
+  autoReconnect?: boolean | AutoReconnectOptions;
+};
+
+export type AutoReconnectOptions = {
+  /**
+   * Maximum number of reconnect attempts before giving up. Defaults to
+   * `Infinity` (retry forever).
+   */
+  maxAttempts?: number;
 };
 
 export type MessageBody =
@@ -45,4 +54,10 @@ export type SendMessage<T extends MessageBody = MessageBody> = {
   body: T;
   to: string[];
   type: string;
+};
+
+export type DisconnectReason = {
+  code: number;
+  reason: string;
+  wasClean: boolean;
 };
