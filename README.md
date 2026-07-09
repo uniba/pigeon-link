@@ -157,6 +157,28 @@ pigeon.addDisconnectListener(({ code, reason, wasClean }) => {
 `options` for both APIs accepts the standard `addEventListener` third argument
 (`once`, `signal`, etc.).
 
+## Binary frames
+
+### `addReceiveBinaryListener(handler, options?)` / `removeReceiveBinaryListener(handler, options?)`
+
+Pigeon Room delivers binary frames on the same socket as text messages. They
+carry no JSON, so they are handed over as the `ArrayBuffer` they arrived as, for
+the application to decode.
+
+```typescript
+pigeon.addReceiveBinaryListener((data) => {
+  const view = new DataView(data);
+  // ... decode your own frame format
+});
+```
+
+A room with no binary traffic never fires this, and an application that does not
+subscribe pays nothing: an unheard frame is dropped where it arrives. The event
+is also broadcast on `globalThis` as `pigeon:receive-binary`, mirroring the bare
+`pigeon:receive` broadcast.
+
+`options` accepts the standard `addEventListener` third argument.
+
 ## `close()`
 
 Deliberately closes the underlying WebSocket and stops auto-reconnect, while

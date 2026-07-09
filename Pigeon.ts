@@ -43,6 +43,7 @@ class Pigeon {
   );
   private connectMap: Map<unknown, EventListener> = new Map();
   private disconnectMap: Map<unknown, EventListener> = new Map();
+  private receiveBinaryMap: Map<unknown, EventListener> = new Map();
 
   constructor(pigeonOptions: PigeonOptions) {
     console.log("pigeon link v0.3.0");
@@ -103,8 +104,21 @@ class Pigeon {
         : "");
 
     this.socket = new WebSocket(url);
+    // A Blob would have to be read asynchronously before a consumer could even
+    // look at the frame's header. An ArrayBuffer can be read in place.
+    this.socket.binaryType = "arraybuffer";
 
     this.socket.addEventListener("message", (e) => {
+      // Pigeon Room sends binary frames on the same socket as text ones. They
+      // are not JSON, and until now they fell through to the malformed-message
+      // path below: one `console.error` per frame, with the frame itself as an
+      // argument. A room carrying a depth-camera stream fills the console with
+      // hundreds of retained buffers a second.
+      if (typeof e.data !== "string") {
+        this.dispatchReceiveBinary(e.data as ArrayBuffer);
+        return;
+      }
+
       let message: ReceivedMessage;
       try {
         const data = JSON.parse(e.data);
@@ -262,6 +276,10 @@ class Pigeon {
     this.sendListeners.removeAll();
     this.removeAllLifecycleListeners(this.connectMap, "pigeon:connect");
     this.removeAllLifecycleListeners(this.disconnectMap, "pigeon:disconnect");
+    this.removeAllLifecycleListeners(
+      this.receiveBinaryMap,
+      "pigeon:receive-binary",
+    );
     this.isConnected = false;
   }
 
@@ -481,6 +499,39 @@ class Pigeon {
     );
   }
 
+  /**
+   * Subscribes to binary frames. Pigeon Room delivers them on the same socket
+   * as text messages; they carry no JSON, so they are handed over as the
+   * `ArrayBuffer` they arrived as, for the application to decode.
+   *
+   * A room with no binary traffic never fires this, and an application that
+   * does not subscribe pays nothing: an unheard frame is dropped where it
+   * arrives.
+   */
+  public addReceiveBinaryListener(
+    handler: (data: ArrayBuffer) => void,
+    options?: boolean | AddEventListenerOptions,
+  ): void {
+    this.addLifecycleListener(
+      this.receiveBinaryMap,
+      "pigeon:receive-binary",
+      handler,
+      options,
+    );
+  }
+
+  public removeReceiveBinaryListener(
+    handler: (data: ArrayBuffer) => void,
+    options?: boolean | EventListenerOptions,
+  ): void {
+    this.removeLifecycleListener(
+      this.receiveBinaryMap,
+      "pigeon:receive-binary",
+      handler,
+      options,
+    );
+  }
+
   private addLifecycleListener<P>(
     map: Map<unknown, EventListener>,
     eventName: string,
@@ -603,6 +654,17 @@ class Pigeon {
     // into per-instance state.
     globalThis.dispatchEvent(
       new CustomEvent<ReceivedMessage>("pigeon:receive", { detail: message }),
+    );
+  }
+
+  private dispatchReceiveBinary(data: ArrayBuffer): void {
+    this.events.dispatchEvent(
+      new CustomEvent<ArrayBuffer>("pigeon:receive-binary", { detail: data }),
+    );
+    // Mirrors the bare `pigeon:receive` broadcast above, so a page that reaches
+    // for the global event surface finds binary there too.
+    globalThis.dispatchEvent(
+      new CustomEvent<ArrayBuffer>("pigeon:receive-binary", { detail: data }),
     );
   }
 

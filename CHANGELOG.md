@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- Binary frames no longer take the malformed-message path. They were run through
+  `JSON.parse`, which throws, so every one of them produced a
+  `console.error("Pigeon: dropping malformed incoming message", err, e.data)` —
+  with the frame itself as an argument, keeping it alive. A room carrying a
+  depth-camera stream measured **141 dropped frames a second, each a 246 KB Blob
+  handed to the console**, on a screen that only wanted the text messages.
+
+### Added
+
+- `addReceiveBinaryListener` / `removeReceiveBinaryListener`: subscribe to the
+  binary frames Pigeon Room sends on the same socket as text ones. The frame is
+  handed over as the `ArrayBuffer` it arrived as, for the application to decode.
+  A `pigeon:receive-binary` event is also broadcast on `globalThis`, mirroring
+  the bare `pigeon:receive` broadcast.
+
+### Changed
+
+- The socket's `binaryType` is now `"arraybuffer"` rather than the default
+  `"blob"`, so a frame's header can be read in place instead of through an
+  asynchronous `Blob` read. This is visible to anyone reading `pigeon.socket`
+  directly.
+
 ## [0.3.0] - 2026-05-29
 
 ### Added
