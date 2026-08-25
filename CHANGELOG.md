@@ -2,6 +2,104 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2026-08-17
+
+Everything here already existed, hand-rolled on a raw `WebSocket`, inside
+`hyper-icc-kids2026-venue-server`'s outbound bridge to the internet Pigeon Room.
+It is moved here so the next client does not have to write it again — and so the
+two failure modes below stop being everyone's to rediscover.
+
+### Added
+
+- **Binary frames.** `sendBinary(message, payload)` writes a
+  `@circuitlab/pigeon-message` v1 binary frame (a JSON header plus raw bytes);
+  `addReceiveBinaryListener` / `removeReceiveBinaryListener` subscribe to
+  incoming ones, filtered by `type` exactly as the text listeners are. Binary
+  and text stay separate streams — a text listener never sees a binary frame and
+  vice versa. `ReceivedBinaryMessage`, `SendBinaryMessage`, `BinaryFrameHeader`
+  and `ParsedBinaryFrame` are exported from `types.ts`.
+- **`keepAlive`** option: pings the host every `intervalMs` (default 30 s) and
+  watches for the room having gone silent for `staleMs` (default 90 s). Two jobs
+  at once — the ping keeps the room's own idle reaper from collecting an idle
+  publisher, and the silence is the only available evidence that a half-open
+  socket has stopped carrying anything.
+- **`keepAlive.connectTimeoutMs`** (default `staleMs`): abandons a socket left
+  sitting in `CONNECTING` and schedules the next attempt.
+- **`autoReconnect.onCleanClose`**: also reconnect when the peer closes cleanly.
+  Defaults to `false`. Set it against a room that may close a connection it
+  still expects to keep — `@circuitlab/pigeon-room` up to v1.1.4 reaps a peer
+  that has not _sent_ for 75 s with a clean close.
+- **`sendQueue`** option: holds messages sent while the socket is down and
+  flushes them, in order, on reconnect. Bounded by both a message count
+  (`limit`, default 1000) and a byte budget (`maxBytes`, default 8 MB) — a count
+  alone is not a bound once binary frames are queued. Overflow is dropped and
+  counted rather than grown.
+- **`stats()`**: `connected`, `socketOpen`, `queued`, `queuedBytes`, `buffered`,
+  `sent`, `sentBytes`, `dropped`, `inboundAgeMs`, `staleMs` — enough for a
+  `/status` endpoint to show that a client is connected _and_ keeping up, which
+  are different questions. `connected` reports having joined (the `init`
+  handshake completed); `socketOpen` is the transport-level answer, and the two
+  come apart in the `staticId` window described below.
+- `send()` and `sendBinary()` return the byte count written (or queued), or `0`
+  when the message was dropped, so a caller can meter its own egress. Text is
+  measured in UTF-8 bytes — what goes on the wire — not UTF-16 code units, so
+  the figure is comparable with the binary path's and with the queue's
+  `maxBytes` budget.
+- keepAlive timings are validated at construction: a non-positive `intervalMs`,
+  or a `staleMs` shorter than two ping intervals, is clamped with a warning.
+  Left unclamped, a `staleMs` below `intervalMs` tears down healthy connections
+  on the watchdog's first tick, on every generation — which from outside looks
+  exactly like the network fault keepAlive exists to survive. Enabling
+  `keepAlive` without `autoReconnect` also warns, since nothing would reopen the
+  socket the watchdog closes.
+- A `console.warn` when the socket's own `bufferedAmount` passes 1 MB. What to
+  shed is the application's decision; it can only make it on evidence.
+
+### Fixed
+
+- **A binary frame is no longer reported as a malformed message.** Frames
+  arrived as `Blob`s and went to the text parser, which threw and logged, once
+  per frame — a 30 Hz stream flooded the console until the page wedged. The
+  socket now asks for `arraybuffer` and binary is decoded on its own path.
+- **A half-open socket is now detected and healed.** When the network path
+  disappears without a FIN, no `close` and no `error` ever fire, `readyState`
+  stays `OPEN`, and everything sent from then on goes nowhere. With `keepAlive`
+  on, the watchdog notices and reconnects.
+- **A stalled reconnect no longer wedges the client.** Healing a half-open
+  socket with `close()` does not work: `close()` opens a _handshake_, and the
+  peer is precisely what has gone missing, so the socket parks in `CLOSING` and
+  the `close` event that would trigger the reconnect never arrives. The watchdog
+  now detaches the socket, announces the disconnect itself (code `1006`) and
+  schedules the reconnect. The retry after it is equally exposed — the same dead
+  path swallows the opening handshake — which is what `connectTimeoutMs` covers.
+
+### Changed
+
+- Outgoing text messages now carry `ver: 1`, as the pigeon-message spec has
+  always required of senders. Rooms that do not read `ver` are unaffected
+  (absent is specified to mean v0), but the declaration is now correct. It is
+  written last, so a `ver` carried on a relayed message cannot misdeclare the
+  format this client speaks.
+- `send()` returns `number` where it returned `void`. Without `sendQueue` it
+  still throws when the socket is not `OPEN`, unchanged from v0.3.0.
+- Send-listener events fire when a message reaches the socket. With `sendQueue`,
+  that is at flush time rather than when the message is accepted, so a listener
+  never announces a send still sitting in memory — or one that `destroy()` goes
+  on to discard.
+- `ping()` and `pong()` are never queued, even with `sendQueue` on: a pong is
+  worth something only on the connection that asked for it, and one delivered
+  after a reconnect answers a ping from a socket that no longer exists. They
+  throw while the socket is down, as in v0.3.0.
+
+### Known limitation (room-side, not fixed here)
+
+Reconnecting with a `staticId` while the room still holds the previous peer
+under that id — which is exactly the window a half-open socket opens, since the
+room's side also still reads `OPEN` — is shadowed: `pigeon-room`'s
+`#resolveTargets` dedupes targets by id, so `init` is delivered to the ghost and
+the live client never completes its handshake. It clears when the room's own
+reaper collects the stale peer. Reconnecting without a `staticId` is unaffected.
+
 ## [0.3.0] - 2026-05-29
 
 ### Added

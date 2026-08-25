@@ -1,0 +1,42 @@
+{
+  "version": "5",
+  "specifiers": {
+    "jsr:@akisoqls/random-string@~0.1.1": "0.1.1",
+    "jsr:@circuitlab/pigeon-message@1": "1.0.0",
+    "jsr:@circuitlab/pigeon-room@^1.1.4": "1.1.4",
+    "jsr:@std/assert@1": "1.0.19",
+    "jsr:@std/internal@^1.0.12": "1.0.14"
+  },
+  "jsr": {
+    "@akisoqls/random-string@0.1.1": {
+      "integrity": "b2d657b64ebde3e3b7a992b764fba9915524842c75ea4ccb0c3957d89fe7576e"
+    },
+    "@circuitlab/pigeon-message@1.0.0": {
+      "integrity": "27fb58aefd4cf30cecd1c13d7a717d1a7fbd68c4bd09185606f56c729abf287c"
+    },
+    "@circuitlab/pigeon-room@1.1.4": {
+      "integrity": "963fa8d7d7f7e6a1939ed47980fcb2f1812f983d0913a6f764363010c7a1604e",
+      "dependencies": [
+        "jsr:@akisoqls/random-string",
+        "jsr:@circuitlab/pigeon-message"
+      ]
+    },
+    "@std/assert@1.0.19": {
+      "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
+      "dependencies": [
+        "jsr:@std/internal"
+      ]
+    },
+    "@std/internal@1.0.14": {
+      "integrity": "291516b3d4c35024d6ffbc0a9df5bf4c64116e05b50012cf846710152d2ffdf7"
+    }
+  },
+  "workspace": {
+    "dependencies": [
+      "jsr:@akisoqls/random-string@~0.1.1",
+      "jsr:@circuitlab/pigeon-message@1",
+      "jsr:@circuitlab/pigeon-room@^1.1.4",
+      "jsr:@std/assert@1"
+    ]
+  }
+}
