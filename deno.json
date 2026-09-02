@@ -4,7 +4,9 @@
   "license": "MIT",
   "exports": "./mod.ts",
   "tasks": {
-    "test": "deno test -A"
+    "test": "deno test -A",
+    "bundle:browser": "deno bundle --platform browser --sourcemap=linked -o dist/pigeon-link.js mod.ts",
+    "bundle:browser:watch": "deno bundle --watch --platform browser --sourcemap=linked -o dist/pigeon-link.js mod.ts"
   },
   "fmt": {
     "singleQuote": false,
@@ -13,7 +15,7 @@
   "lint": {
   },
   "publish": {
-    "exclude": ["Pigeon_test.ts", ".claude", ".vim"]
+    "exclude": ["Pigeon_test.ts", "dist", ".claude", ".vim"]
   },
   "imports": {
     "@akisoqls/random-string": "jsr:@akisoqls/random-string@^0.1.1",
