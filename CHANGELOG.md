@@ -23,8 +23,9 @@ two failure modes below stop being everyone's to rediscover.
   at once — the ping keeps the room's own idle reaper from collecting an idle
   publisher, and the silence is the only available evidence that a half-open
   socket has stopped carrying anything.
-- **`keepAlive.connectTimeoutMs`** (default `staleMs`): abandons a socket left
-  sitting in `CONNECTING` and schedules the next attempt.
+- **`keepAlive.connectTimeoutMs`** (default `staleMs`): abandons a socket that
+  has not joined in time — left sitting in `CONNECTING`, or open without the
+  room's `init` — and schedules the next attempt.
 - **`autoReconnect.onCleanClose`**: also reconnect when the peer closes cleanly.
   Defaults to `false`. Set it against a room that may close a connection it
   still expects to keep — `@circuitlab/pigeon-room` up to v1.1.4 reaps a peer
@@ -72,6 +73,12 @@ two failure modes below stop being everyone's to rediscover.
   now detaches the socket, announces the disconnect itself (code `1006`) and
   schedules the reconnect. The retry after it is equally exposed — the same dead
   path swallows the opening handshake — which is what `connectTimeoutMs` covers.
+- **A rejoin shadowed by its own `staticId` ghost no longer stays unjoined.**
+  The room delivers `init` to the previous connection while it still holds it,
+  and does not send it again once that connection is gone. The new socket then
+  kept `connected: false` indefinitely, while pongs reaching it kept the
+  watchdog satisfied. With `keepAlive`, a socket that has not received `init`
+  within `connectTimeoutMs` is now abandoned and retried.
 
 ### Changed
 
@@ -96,9 +103,12 @@ two failure modes below stop being everyone's to rediscover.
 Reconnecting with a `staticId` while the room still holds the previous peer
 under that id — which is exactly the window a half-open socket opens, since the
 room's side also still reads `OPEN` — is shadowed: `pigeon-room`'s
-`#resolveTargets` dedupes targets by id, so `init` is delivered to the ghost and
-the live client never completes its handshake. It clears when the room's own
-reaper collects the stale peer. Reconnecting without a `staticId` is unaffected.
+`#resolveTargets` dedupes targets by id, so `init`, and anything else addressed
+to that id, goes to the ghost. The room does not send `init` again once it has
+collected the stale peer. With `keepAlive`, the client retries every
+`connectTimeoutMs` (plus the reconnect backoff) and joins on the first attempt
+after the room has let the ghost go. Without `keepAlive` it stays unjoined until
+its next reconnect. Reconnecting without a `staticId` is unaffected.
 
 ## [0.3.0] - 2026-05-29
 

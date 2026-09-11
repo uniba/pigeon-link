@@ -463,6 +463,57 @@ test("the watchdog notices a half-open socket and reconnects through it", async 
   await server.shutdown();
 });
 
+// ------------------------------------------------- rejoin shadowed by a ghost
+
+test("a socket that opens but never receives init is retried until it joins", async () => {
+  const { server, room, url } = startRoom();
+
+  // An earlier connection under id "a". The room delivers a's init to it.
+  const ghost = new WebSocket(`${url}?address=${ADDRESS}&initas=a`);
+  await new Promise((r) => ghost.addEventListener("open", r, { once: true }));
+  await until(
+    () => room.pigeons.some((p) => p.id === "a"),
+    3000,
+    "the earlier connection joins",
+  );
+
+  const reasons: string[] = [];
+  const a = new Pigeon({
+    baseUrl: url,
+    address: ADDRESS,
+    staticId: "a",
+    autoReconnect: true,
+    keepAlive: { intervalMs: 100, staleMs: 300 },
+  });
+  a.addDisconnectListener((r) => reasons.push(r.reason));
+  await until(() => a.stats().socketOpen, 3000, "a's socket opens");
+  await new Promise((r) => setTimeout(r, 50));
+  assert(!a.isConnected, "a's init went to the earlier connection");
+
+  // From here on the room's pongs reach a's socket, so the watchdog stays quiet.
+  const ghostClosed = new Promise((r) =>
+    ghost.addEventListener("close", r, { once: true })
+  );
+  ghost.close();
+  await ghostClosed;
+
+  await until(() => a.isConnected, 5000, "a joins");
+  assertEquals(a.id, "a");
+  assert(
+    reasons.some((r) => r.includes("init")),
+    `the unjoined socket was abandoned (reasons: ${JSON.stringify(reasons)})`,
+  );
+
+  // A joined socket is left alone.
+  const seen = reasons.length;
+  await new Promise((r) => setTimeout(r, 700));
+  assert(a.isConnected, "still joined");
+  assertEquals(reasons.length, seen, "no disconnect after joining");
+
+  a.destroy();
+  await server.shutdown();
+});
+
 // ---------------------------------------------------------- clean-close rule
 
 test("onCleanClose reconnects after the room reaps a quiet peer", async () => {

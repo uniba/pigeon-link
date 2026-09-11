@@ -154,6 +154,7 @@ class Pigeon {
         this.id = message.body.id;
         this.isConnected = true;
         this.reconnectAttempts = 0;
+        this.clearConnectTimer();
         this.events.dispatchEvent(new CustomEvent("pigeon:connect"));
       }
     });
@@ -245,23 +246,30 @@ class Pigeon {
     // then sits at CONNECTING with nothing — no `open`, no `error`, no `close`
     // — ever arriving. Healing a half-open socket without this only moves
     // where it hangs.
+    //
+    // The timer runs until the room's `init`, so it also ends a socket that
+    // opened but never joined.
     if (this.keepAlive) {
       const { connectTimeoutMs } = this.keepAlive;
       this.connectTimer = setTimeout(() => {
         this.connectTimer = undefined;
-        if (socket.readyState !== WebSocket.CONNECTING) return;
-        this.abandonSocket(
-          socket,
-          `no handshake from the room within ${connectTimeoutMs} ms`,
-        );
+        if (this.isConnected) return;
+        if (socket.readyState === WebSocket.CONNECTING) {
+          this.abandonSocket(
+            socket,
+            `no handshake from the room within ${connectTimeoutMs} ms`,
+          );
+        } else if (socket.readyState === WebSocket.OPEN) {
+          this.abandonSocket(
+            socket,
+            `no init from the room within ${connectTimeoutMs} ms; it may be ` +
+              `delivering it to an earlier connection under the same staticId`,
+          );
+        }
       }, connectTimeoutMs);
     }
 
     socket.addEventListener("open", () => {
-      if (this.connectTimer !== undefined) {
-        clearTimeout(this.connectTimer);
-        this.connectTimer = undefined;
-      }
       // A fresh socket is alive by definition; start its liveness clock here so
       // the watchdog measures silence since the connection, not since boot.
       this.lastInboundAt = Date.now();
@@ -336,7 +344,7 @@ class Pigeon {
    *  the socket instance, so a timer that outlives its connection is a no-op
    *  rather than acting on the next one. */
   private startLiveness(socket: WebSocket): void {
-    this.stopLiveness();
+    this.stopHeartbeat();
     if (!this.keepAlive) return;
     const { intervalMs, staleMs } = this.keepAlive;
 
@@ -396,12 +404,22 @@ class Pigeon {
     );
   }
 
+  /** Stops the keepalive ping, the watchdog and the connect timer. */
   private stopLiveness(): void {
+    this.stopHeartbeat();
+    this.clearConnectTimer();
+  }
+
+  /** Stops the keepalive ping and the watchdog. */
+  private stopHeartbeat(): void {
     if (this.keepaliveTimer !== undefined) clearInterval(this.keepaliveTimer);
     if (this.watchdogTimer !== undefined) clearInterval(this.watchdogTimer);
-    if (this.connectTimer !== undefined) clearTimeout(this.connectTimer);
     this.keepaliveTimer = undefined;
     this.watchdogTimer = undefined;
+  }
+
+  private clearConnectTimer(): void {
+    if (this.connectTimer !== undefined) clearTimeout(this.connectTimer);
     this.connectTimer = undefined;
   }
 
