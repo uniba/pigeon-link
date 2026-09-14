@@ -243,7 +243,11 @@ reported with code `1006`.
 
 `connectTimeoutMs` (default: `staleMs`) covers the same failure one step later:
 the network that ate the connection eats the handshake that would replace it,
-leaving a socket at `CONNECTING` that nothing will ever wake.
+leaving a socket at `CONNECTING` that nothing will ever wake. It runs until the
+room's `init`, so it also ends a socket that opened but never joined — what a
+rejoin under a `staticId` gets while the room still holds the previous
+connection under that id. The retry joins once the room has let that connection
+go.
 
 Two things are checked at construction. `staleMs` must outlast two ping
 intervals — set it shorter and the watchdog fires before a pong to its own ping
@@ -297,8 +301,9 @@ behind) are the two shapes congestion takes; `inboundAgeMs` climbing toward
 `connected` means **joined** — the `init` handshake completed — while
 `socketOpen` is the transport-level answer. They come apart in the `staticId`
 window described in [CHANGELOG.md](./CHANGELOG.md), where a rejoin shadowed by
-its own ghost holds an open socket that never receives its `init`; reporting the
-socket there would show a healthy client that is in fact deaf.
+its own ghost holds an open socket that has not received its `init` (with
+`keepAlive`, until `connectTimeoutMs` retries it); reporting the socket there
+would show a healthy client that is in fact deaf.
 
 ## Connection lifecycle
 

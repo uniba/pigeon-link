@@ -61,14 +61,19 @@ export type KeepAliveOptions = {
    */
   staleMs?: number;
   /**
-   * How long a socket may sit in `CONNECTING` before the attempt is abandoned
-   * and the next one scheduled. Defaults to `staleMs`.
+   * How long a socket may take to join — from opening the WebSocket until the
+   * room's `init` arrives — before the attempt is abandoned and the next one
+   * scheduled. Defaults to `staleMs`.
    *
    * A WebSocket handshake has no timeout of its own, and the network that just
    * ate a live connection will happily eat the handshake that tries to replace
    * it — leaving a socket stuck at `CONNECTING` with no `open`, no `error` and
    * no `close` to react to. Without this, healing a half-open socket only
    * moves where it hangs.
+   *
+   * It also ends a socket that opened but never received `init`: a rejoin under
+   * a `staticId` while the room still holds the previous connection under that
+   * id. The retry joins once the room has let the previous connection go.
    */
   connectTimeoutMs?: number;
 };
@@ -102,8 +107,8 @@ export type PigeonStats = {
    * Whether this client has *joined* — the `init` handshake completed — which
    * is the question a status page is really asking. It can be `false` while
    * `socketOpen` is `true`: see the `staticId` note in CHANGELOG 0.4.0, where
-   * a rejoin shadowed by its own ghost holds an open socket that never
-   * receives its `init`.
+   * a rejoin shadowed by its own ghost holds an open socket that has not
+   * received its `init` (with `keepAlive`, until `connectTimeoutMs` retries it).
    */
   connected: boolean;
   /** Whether the underlying socket is `OPEN`, regardless of the handshake.
