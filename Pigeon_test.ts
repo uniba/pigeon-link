@@ -9,6 +9,7 @@ import { PigeonRoom } from "@circuitlab/pigeon-room";
 import { assert, assertEquals, assertThrows } from "@std/assert";
 import { Pigeon } from "./mod.ts";
 import { utf8ByteLength } from "./_internal/utf8.ts";
+import denoJson from "./deno.json" with { type: "json" };
 
 const ADDRESS = "test-room";
 
@@ -37,23 +38,27 @@ const until = async (cond: () => boolean, ms = 5000, label = "condition") => {
 
 const connected = (p: Pigeon) => until(() => p.isConnected, 5000, "connect");
 
-/** Captures console.warn/error for the duration of `fn`. */
+/** Captures console.log/warn/error for the duration of `fn`. */
 async function captureConsole(
   fn: () => Promise<void> | void,
-): Promise<{ warns: string[]; errors: string[] }> {
+): Promise<{ logs: string[]; warns: string[]; errors: string[] }> {
+  const logs: string[] = [];
   const warns: string[] = [];
   const errors: string[] = [];
+  const realLog = console.log;
   const realWarn = console.warn;
   const realError = console.error;
+  console.log = (...a: unknown[]) => logs.push(a.join(" "));
   console.warn = (...a: unknown[]) => warns.push(a.join(" "));
   console.error = (...a: unknown[]) => errors.push(a.join(" "));
   try {
     await fn();
   } finally {
+    console.log = realLog;
     console.warn = realWarn;
     console.error = realError;
   }
-  return { warns, errors };
+  return { logs, warns, errors };
 }
 
 // -------------------------------------------------------------- byte metering
@@ -654,6 +659,25 @@ test("keepAlive without autoReconnect warns that nothing will reopen", async () 
   assert(
     warns.some((w) => w.includes("keepAlive") && w.includes("autoReconnect")),
     `expected a keepAlive/autoReconnect warning, got ${JSON.stringify(warns)}`,
+  );
+
+  a.destroy();
+  await server.shutdown();
+});
+
+// ------------------------------------------------------------ startup banner
+
+test("the startup banner names the version in deno.json", async () => {
+  const { server, url } = startRoom();
+  let a!: Pigeon;
+  const { logs } = await captureConsole(() => {
+    a = new Pigeon({ baseUrl: url, address: ADDRESS });
+  });
+  // The banner is how a log answers "which build is this"; a version bumped in
+  // deno.json alone would have it answer wrongly, as 0.4.0-rc.1 did.
+  assert(
+    logs.includes(`pigeon link v${denoJson.version}`),
+    `expected a banner naming ${denoJson.version}, got ${JSON.stringify(logs)}`,
   );
 
   a.destroy();

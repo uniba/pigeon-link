@@ -57,6 +57,9 @@ two failure modes below stop being everyone's to rediscover.
 
 ### Fixed
 
+- **The startup banner names the version that is running.** It was a literal
+  that nobody bumped, so 0.4.0-rc.1 announced itself as `pigeon link v0.4.0`. A
+  test now holds it to `version` in `deno.json`, and publishing runs the tests.
 - **A binary frame is no longer reported as a malformed message.** Frames
   arrived as `Blob`s and went to the text parser, which threw and logged, once
   per frame — a 30 Hz stream flooded the console until the page wedged. The
