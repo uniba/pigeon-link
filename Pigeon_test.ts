@@ -468,6 +468,85 @@ test("the watchdog notices a half-open socket and reconnects through it", async 
   await server.shutdown();
 });
 
+// ------------------------------------------------- rejoin shadowed by a ghost
+
+/** A room that withholds `init` from the first connection it accepts, and
+ *  answers pings on it. This is what a rejoin under a `staticId` meets while
+ *  the room still holds the earlier connection under that id: `pigeon-room`
+ *  resolves targets by id and keeps the first match, so the handshake goes to
+ *  the ghost, and once the ghost is collected the pongs arriving here keep the
+ *  watchdog satisfied. Stubbed rather than staged against a real room, so the
+ *  test still means something once the room stops doing it
+ *  (uniba/pigeon-room#56). */
+function initWithholdingRoom() {
+  let accepted = 0;
+  const reply = (socket: WebSocket, type: string, id: string) =>
+    socket.send(JSON.stringify({
+      ver: 1,
+      type,
+      address: ADDRESS,
+      from: "host",
+      to: [id],
+      body: type === "init" ? { id, clients: [id] } : "",
+      timestamp: Date.now(),
+    }));
+
+  const server = Deno.serve({ port: 0, onListen: () => {} }, (req) => {
+    const { socket, response } = Deno.upgradeWebSocket(req);
+    const id = new URL(req.url).searchParams.get("initas") ?? "peer";
+    const withhold = accepted++ === 0;
+    socket.addEventListener("open", () => {
+      if (!withhold) reply(socket, "init", id);
+    });
+    socket.addEventListener("message", (e) => {
+      if (typeof e.data !== "string") return;
+      if (JSON.parse(e.data)?.type === "ping") reply(socket, "pong", id);
+    });
+    return response;
+  });
+  const port = (server.addr as Deno.NetAddr).port;
+  return {
+    server,
+    url: `ws://localhost:${port}/pigeon`,
+    accepted: () => accepted,
+  };
+}
+
+test("a socket that opens but never receives init is retried until it joins", async () => {
+  const room = initWithholdingRoom();
+  const reasons: string[] = [];
+  const a = new Pigeon({
+    baseUrl: room.url,
+    address: ADDRESS,
+    staticId: "a",
+    autoReconnect: true,
+    keepAlive: { intervalMs: 100, staleMs: 300 },
+  });
+  a.addDisconnectListener((r) => reasons.push(r.reason));
+
+  await until(() => a.stats().socketOpen, 3000, "the socket opens");
+  await new Promise((r) => setTimeout(r, 200));
+  assert(!a.isConnected, "the first connection is not joined");
+  assert(a.stats().socketOpen, "yet its socket is open and answering");
+
+  await until(() => a.isConnected, 5000, "a joins on a later connection");
+  assertEquals(a.id, "a", "staticId identity");
+  assert(
+    reasons.some((r) => r.includes("init")),
+    `the unjoined socket was abandoned (reasons: ${JSON.stringify(reasons)})`,
+  );
+  assert(room.accepted() >= 2, "the room saw a second connection");
+
+  // A joined socket is left alone.
+  const seen = reasons.length;
+  await new Promise((r) => setTimeout(r, 700));
+  assert(a.isConnected, "still joined");
+  assertEquals(reasons.length, seen, "no disconnect after joining");
+
+  a.destroy();
+  await room.server.shutdown();
+});
+
 // ---------------------------------------------------------- clean-close rule
 
 test("onCleanClose reconnects after the room reaps a quiet peer", async () => {
