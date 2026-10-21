@@ -24,7 +24,7 @@ import { FORMAT_VERSION } from "@circuitlab/pigeon-message";
 /** Must equal `version` in deno.json; a test holds the two together. It is not
  *  imported from deno.json because the npm build is consumed by bundlers that
  *  cannot load JSON without a plugin — rollup among them. */
-const VERSION = "0.4.0-rc.1";
+const VERSION = "0.4.0-rc.2";
 
 const RECONNECT_INITIAL_DELAY = 500;
 const RECONNECT_MAX_DELAY = 30000;
