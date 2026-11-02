@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.4.0] - 2026-08-17
+## [0.4.0] - 2026-11-02
 
 Everything here already existed, hand-rolled on a raw `WebSocket`, inside
 `hyper-icc-kids2026-venue-server`'s outbound bridge to the internet Pigeon Room.
@@ -105,13 +105,21 @@ two failure modes below stop being everyone's to rediscover.
 
 Reconnecting with a `staticId` while the room still holds the previous peer
 under that id — which is exactly the window a half-open socket opens, since the
-room's side also still reads `OPEN` — is shadowed: `pigeon-room`'s
+room's side also still reads `OPEN` — is shadowed on `pigeon-room` up to v1.1.4:
 `#resolveTargets` dedupes targets by id, so `init`, and anything else addressed
 to that id, goes to the ghost. The room does not send `init` again once it has
 collected the stale peer. With `keepAlive`, the client retries every
 `connectTimeoutMs` (plus the reconnect backoff) and joins on the first attempt
 after the room has let the ghost go. Without `keepAlive` it stays unjoined until
 its next reconnect. Reconnecting without a `staticId` is unaffected.
+
+How long that takes is the room's to decide; the client cannot tell a ghost from
+a live connection under the same id, so it can only keep retrying. An exhibition
+fork of `pigeon-room` v1.1.1, which drops a peer only once its socket has
+closed, held ghosts for about 16 minutes, and about three disconnects in ten led
+to such a wait ([#14](https://github.com/uniba/pigeon-link/issues/14)). From
+v1.1.6 the room answers `init` on the connection that opened, so a rejoin is not
+shadowed.
 
 ## [0.3.0] - 2026-05-29
 
